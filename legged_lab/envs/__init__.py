@@ -1,0 +1,7 @@
+from legged_lab.envs.base.base_env import BaseEnv
+from legged_lab.envs.base.base_env_config import BaseEnvConfig, BaseAgentConfig
+from legged_lab.envs.h1.h1_config import H1FlatEnvCfg, H1FlatAgentCfg
+from legged_lab.utils.task_registry import task_registry
+
+
+task_registry.register("h1_flat", BaseEnv, H1FlatEnvCfg(), H1FlatAgentCfg())
