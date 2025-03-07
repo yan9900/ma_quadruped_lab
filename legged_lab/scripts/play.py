@@ -30,6 +30,8 @@ import isaacsim.core.utils.torch as torch_utils
 from legged_lab.envs import *  # noqa:F401, F403
 from isaaclab_tasks.utils import get_checkpoint_path
 
+from legged_lab.utils.keyboard import Keyboard
+
 
 def train():
     runner: OnPolicyRunner
@@ -70,6 +72,8 @@ def train():
     export_policy_as_onnx(
         runner.alg.actor_critic, normalizer=runner.obs_normalizer, path=export_model_dir, filename="policy.onnx"
     )
+
+    keyboard = Keyboard(env)  # noqa:F841
 
     obs, _ = env.get_observations()
 

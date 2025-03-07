@@ -5,19 +5,6 @@ from dataclasses import MISSING
 class BaseEnvConfig(BaseConfig):
     device = "cuda:0"
 
-    class sim:
-        dt = 0.005
-        decimation = 4
-
-        class physx:
-            solver_type = 1
-            max_position_iteration_count = 8
-            max_velocity_iteration_count = 8
-            bounce_threshold_velocity = 0.2
-            gpu_max_rigid_contact_count = 2**24
-            gpu_found_lost_pairs_capacity = 2**22
-            gpu_found_lost_aggregate_pairs_capacity = 2**26
-
     class scene:
         episode_length_s = 20.0
         num_envs = 4096
@@ -25,7 +12,7 @@ class BaseEnvConfig(BaseConfig):
         robot = MISSING
         terrain_type = MISSING  # "generator" or "plane"
         terrain_generator = MISSING
-        max_init_terrain_level = 0
+        max_init_terrain_level = 5
 
     class normalization:
 
@@ -40,28 +27,29 @@ class BaseEnvConfig(BaseConfig):
         clip_actions = 100.
         action_scale = 0.25
 
+    class commands:
 
-class Policy:
-    class_name = "ActorCritic"
-    init_noise_std = 1.0
-    actor_hidden_dims = [512, 256, 128]
-    critic_hidden_dims = [512, 256, 128]
-    activation = "elu"
+        resampling_time = 10.
+        heading_command = True
 
+        class ranges:
+            lin_vel_x = [-1.0, 1.0]
+            lin_vel_y = [-1.0, 1.0]
+            ang_vel_yaw = [-1.57, 1.57]
+            heading = [-3.14, 3.14]
 
-class Algorithm:
-    value_loss_coef = 1.0
-    use_clipped_value_loss = True
-    clip_param = 0.2
-    entropy_coef = 0.01
-    num_learning_epochs = 5
-    num_mini_batches = 4
-    learning_rate = 1.0e-3
-    schedule = "adaptive"
-    gamma = 0.99
-    lam = 0.95
-    desired_kl = 0.01
-    max_grad_norm = 1.0
+    class sim:
+        dt = 0.005
+        decimation = 4
+
+        class physx:
+            solver_type = 1
+            max_position_iteration_count = 8
+            max_velocity_iteration_count = 8
+            bounce_threshold_velocity = 0.2
+            gpu_max_rigid_contact_count = 2**24
+            gpu_found_lost_pairs_capacity = 2**22
+            gpu_found_lost_aggregate_pairs_capacity = 2**26
 
 
 class BaseAgentConfig(BaseConfig):
