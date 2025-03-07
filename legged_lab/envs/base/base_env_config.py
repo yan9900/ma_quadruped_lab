@@ -74,6 +74,8 @@ class BaseAgentConfig(BaseConfig):
     run_name = ""
     logger = "wandb"
     wandb_project = MISSING
+    load_run: str = ".*"
+    load_checkpoint: str = "model_.*.pt"
 
     class policy:
         class_name = "ActorCritic"
