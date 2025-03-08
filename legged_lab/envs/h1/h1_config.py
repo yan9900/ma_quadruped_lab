@@ -23,6 +23,7 @@ class H1SceneCfg(SceneCfg):
 @configclass
 class H1RobotCfg(RobotCfg):
     terminate_contacts_body_names: list = [".*torso.*"]
+    feet_names: list = [".*ankle.*"]
 
 
 @configclass
@@ -50,18 +51,13 @@ class H1RewardCfg(RewardCfg):
     fly: RewTerm = RewTerm(func=mdp.fly, weight=-1.0, params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=".*ankle.*"), "threshold": 1.0})
     flat_orientation_l2: RewTerm = RewTerm(func=mdp.flat_orientation_l2, weight=-1.0)
     termination_penalty: RewTerm = RewTerm(func=mdp.is_terminated, weight=-200.0)
-    feet_air_time: RewTerm = RewTerm(func=mdp.feet_air_time_positive_biped, weight=0.5, params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=".*_ankle.*"), "threshold": 0.4})
-    feet_slide: RewTerm = RewTerm(func=mdp.feet_slide, weight=-0.25, params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=".*_ankle.*"), "asset_cfg": SceneEntityCfg("robot", body_names=".*_ankle.*")})
+    feet_air_time: RewTerm = RewTerm(func=mdp.feet_air_time_positive_biped, weight=0.5, params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=".*ankle.*"), "threshold": 0.4})
+    feet_slide: RewTerm = RewTerm(func=mdp.feet_slide, weight=-0.25, params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=".*ankle.*"), "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle.*")})
     feet_force: RewTerm = RewTerm(func=mdp.body_force, weight=-3e-3, params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=".*ankle.*"), "threshold": 500, "max_reward": 400})
     dof_pos_limits: RewTerm = RewTerm(func=mdp.joint_pos_limits, weight=-2.0)
     joint_deviation_hip: RewTerm = RewTerm(func=mdp.joint_deviation_l1, weight=-0.1, params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_yaw.*", ".*_hip_roll.*"])})
     joint_deviation_arms: RewTerm = RewTerm(func=mdp.joint_deviation_l1, weight=-0.2, params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*torso.*", ".*_shoulder.*", ".*_elbow.*"])})
-    joint_deviation_legs: RewTerm = RewTerm(func=mdp.joint_deviation_l1, weight=-0.05, params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_pitch.*", ".*_knee.*", ".*_ankle.*"])})
-
-
-@configclass
-class H1SimCfg(SimCfg):
-    physx: PhysxCfg = PhysxCfg(gpu_max_rigid_patch_count=10 * 2**15)
+    joint_deviation_legs: RewTerm = RewTerm(func=mdp.joint_deviation_l1, weight=-0.05, params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_pitch.*", ".*_knee.*", ".*ankle.*"])})
 
 
 @configclass
@@ -70,7 +66,6 @@ class H1FlatEnvCfg(BaseEnvCfg):
     robot: H1RobotCfg = H1RobotCfg()
     domain_rand: H1DomainRandCfg = H1DomainRandCfg()
     reward: H1RewardCfg = H1RewardCfg()
-    sim: H1SimCfg = H1SimCfg()
 
 
 @configclass

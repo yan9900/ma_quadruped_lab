@@ -26,7 +26,7 @@ simulation_app = app_launcher.app
 import isaacsim.core.utils.torch as torch_utils
 from legged_lab.envs import *  # noqa:F401, F403
 from legged_lab.utils.cli_args import update_rsl_rl_cfg
-
+from isaaclab_tasks.utils import get_checkpoint_path
 import os
 from datetime import datetime
 import torch
@@ -58,6 +58,13 @@ def train():
         log_dir += f"_{agent_cfg.run_name}"
     log_dir = os.path.join(log_root_path, log_dir)
     runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
+
+    if agent_cfg.resume:
+        # get path to previous checkpoint
+        resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
+        print(f"[INFO]: Loading model checkpoint from: {resume_path}")
+        # load previously trained model
+        runner.load(resume_path)
 
     runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)
 

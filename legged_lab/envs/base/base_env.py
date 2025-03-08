@@ -12,6 +12,7 @@ from isaaclab.sensors import ContactSensor, RayCaster
 from isaaclab.envs.mdp.commands import UniformVelocityCommand, UniformVelocityCommandCfg
 from isaaclab.envs.mdp.events import randomize_rigid_body_material, randomize_rigid_body_mass, reset_joints_by_scale, reset_root_state_uniform, push_by_setting_velocity
 from isaaclab.managers import RewardManager
+from isaaclab.utils.buffers import CircularBuffer
 
 
 class BaseEnv(VecEnv):
@@ -80,6 +81,8 @@ class BaseEnv(VecEnv):
         self.robot_cfg.resolve(self.scene)
         self.termination_contact_cfg = SceneEntityCfg(name="contact_sensor", body_names=self.cfg.robot.terminate_contacts_body_names)
         self.termination_contact_cfg.resolve(self.scene)
+        self.feet_cfg = SceneEntityCfg(name="contact_sensor", body_names=self.cfg.robot.feet_names)
+        self.feet_cfg.resolve(self.scene)
 
         self.obs_scales = self.cfg.normalization.obs_scales
         self.add_noise = self.cfg.noise.add_noise
@@ -88,10 +91,12 @@ class BaseEnv(VecEnv):
         self.reset_buf = torch.ones(self.num_envs, device=self.device, dtype=torch.long)
         self.episode_length_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.long)
         self.time_out_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
-        self.noise_scale_vec = self.get_noise_scale_vec()
+        self.init_obs_buffer()
 
-    def compute_observations(self):
+    def compute_current_observations(self):
         robot = self.robot
+        net_contact_forces = self.contact_sensor.data.net_forces_w_history
+
         ang_vel = robot.data.root_ang_vel_b
         projected_gravity = robot.data.projected_gravity_b
         command = self.command_generator.command
@@ -112,8 +117,28 @@ class BaseEnv(VecEnv):
         if self.cfg.scene.height_scanner.enable_height_scan:
             height_scan = (self.height_scanner.data.pos_w[:, 2].unsqueeze(1) - self.height_scanner.data.ray_hits_w[..., 2] - self.cfg.normalization.height_scan_offset)
             actor_obs = torch.cat([actor_obs, height_scan * self.obs_scales.height_scan], dim=-1)
-        critic_obs = actor_obs.clone()
+
+        feet_contact = torch.max(torch.norm(net_contact_forces[:, :, self.feet_cfg.body_ids], dim=-1), dim=1)[0] > 0.5
+
+        critic_obs = torch.cat([
+            actor_obs,
+            robot.data.root_lin_vel_b,
+            feet_contact
+        ], dim=-1)
+
         return actor_obs, critic_obs
+
+    def compute_observations(self):
+        actor_obs, critic_obs = self.compute_current_observations()
+        if self.add_noise:
+            actor_obs = self.add_noise_to_obs(actor_obs)
+
+        actor_obs = torch.clip(actor_obs, -self.clip_obs, self.clip_obs)
+        critic_obs = torch.clip(critic_obs, -self.clip_obs, self.clip_obs)
+
+        self.actor_obs_buffer.append(actor_obs)
+        self.critic_obs_buffer.append(critic_obs)
+        self.extras["observations"] = {"critic": self.critic_obs_buffer.buffer.reshape(self.num_envs, -1)}
 
     def add_noise_to_obs(self, obs):
         obs += (2 * torch.rand_like(obs) - 1) * self.noise_scale_vec
@@ -122,10 +147,8 @@ class BaseEnv(VecEnv):
     def get_observations(self):
         self.sim.step(render=False)
         self.scene.update(dt=self.physics_dt)
-        actor_obs, critic_obs = self.compute_observations()
-        extras = {}
-        extras["observations"] = {"critic": critic_obs}
-        return actor_obs, extras
+        self.compute_observations()
+        return self.actor_obs_buffer.buffer.reshape(self.num_envs, -1), self.extras
 
     def reset(self, env_ids):
         if len(env_ids) == 0:
@@ -147,11 +170,12 @@ class BaseEnv(VecEnv):
 
         self.command_generator.reset(env_ids)
         reward_extras = self.reward_maneger.reset(env_ids)
-        self.extras['episode'] = reward_extras
+        self.extras['logs'] = reward_extras
         self.extras["time_outs"] = self.time_out_buf
 
-        self.actions[env_ids] = 0.0
-        self.last_actions[env_ids] = 0.0
+        self.actor_obs_buffer.reset(env_ids)
+        self.critic_obs_buffer.reset(env_ids)
+        self.last_actions[env_ids] = 0.
         self.episode_length_buf[env_ids] = 0
 
     def step(self, actions: torch.Tensor):
@@ -172,15 +196,7 @@ class BaseEnv(VecEnv):
 
         self.post_physics_step()
 
-        actor_obs, critic_obs = self.compute_observations()
-        if self.add_noise:
-            actor_obs = self.add_noise_to_obs(actor_obs)
-
-        cliped_actor_obs = torch.clip(actor_obs, -self.clip_obs, self.clip_obs)
-        cliped_critic_obs = torch.clip(critic_obs, -self.clip_obs, self.clip_obs)
-        self.extras["observations"] = {"critic": cliped_critic_obs}
-
-        return cliped_actor_obs, self.reward_buf, self.reset_buf, self.extras
+        return self.actor_obs_buffer.buffer.reshape(self.num_envs, -1), self.reward_buf, self.reset_buf, self.extras
 
     def post_physics_step(self):
         self.episode_length_buf += 1
@@ -190,18 +206,19 @@ class BaseEnv(VecEnv):
         self.reward_buf = self.reward_maneger.compute(self.step_dt)
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset(env_ids)
+        self.compute_observations()
 
     def post_physics_step_callback(self):
-
         self.command_generator.compute(self.step_dt)
         if self.cfg.domain_rand.push_robot.enable:
-            env_ids = ((self.episode_length_buf % int(self.cfg.domain_rand.push_robot.push_interval_s / self.step_dt) == 0).nonzero(as_tuple=False).flatten())
-            push_by_setting_velocity(
-                env=self,
-                env_ids=env_ids,
-                velocity_range=self.cfg.domain_rand.push_robot.params["velocity_range"],
-                asset_cfg=self.robot_cfg,
-            )
+            env_ids = (self.episode_length_buf % int(self.cfg.domain_rand.push_robot.push_interval_s / self.step_dt) == 0).nonzero(as_tuple=False).flatten()
+            if len(env_ids) != 0:
+                push_by_setting_velocity(
+                    env=self,
+                    env_ids=env_ids,
+                    velocity_range=self.cfg.domain_rand.push_robot.params["velocity_range"],
+                    asset_cfg=self.robot_cfg,
+                )
 
     def check_termination(self):
         net_contact_forces = self.contact_sensor.data.net_forces_w_history
@@ -224,7 +241,7 @@ class BaseEnv(VecEnv):
                 asset_cfg=self.robot_cfg
             )
 
-        if self.cfg.domain_rand.add_rigid_body_mass:
+        if self.cfg.domain_rand.add_rigid_body_mass.enable:
             robot_cfg = SceneEntityCfg(name="robot", body_names=self.cfg.domain_rand.add_rigid_body_mass.params["body_names"])
             robot_cfg.resolve(self.scene)
             randomize_rigid_body_mass(
@@ -235,8 +252,8 @@ class BaseEnv(VecEnv):
                 operation=self.cfg.domain_rand.add_rigid_body_mass.params["operation"],
             )
 
-    def get_noise_scale_vec(self):
-        actor_obs, _ = self.compute_observations()
+    def init_obs_buffer(self):
+        actor_obs, _ = self.compute_current_observations()
         noise_vec = torch.zeros_like(actor_obs[0])
         noise_scales = self.cfg.noise.noise_scales
         noise_level = self.cfg.noise.noise_level
@@ -248,4 +265,7 @@ class BaseEnv(VecEnv):
         noise_vec[9 + self.num_actions * 2 : 9 + self.num_actions * 3] = 0.0
         if self.cfg.scene.height_scanner.enable_height_scan:
             noise_vec[9 + self.num_actions * 3 :] = (noise_scales.height_scan * noise_level * self.obs_scales.height_scan)
-        return noise_vec
+        self.noise_scale_vec = noise_vec
+
+        self.actor_obs_buffer = CircularBuffer(max_len=self.cfg.robot.actor_obs_history_length, batch_size=self.num_envs, device=self.device)
+        self.critic_obs_buffer = CircularBuffer(max_len=self.cfg.robot.critic_obs_history_length, batch_size=self.num_envs, device=self.device)

@@ -31,8 +31,11 @@ class SceneCfg:
 
 @configclass
 class RobotCfg:
+    actor_obs_history_length = 10
+    critic_obs_history_length = 10
     action_scale: float = 0.25
     terminate_contacts_body_names: list = []
+    feet_names: list = []
 
 
 @configclass
@@ -179,8 +182,8 @@ class BaseEnvCfg:
 class PolicyCfg:
     class_name: str = "ActorCritic"
     init_noise_std: float = 1.0
-    actor_hidden_dims: list = [256, 256, 128]
-    critic_hidden_dims: list = [256, 256, 128]
+    actor_hidden_dims: list = [512, 256, 128]
+    critic_hidden_dims: list = [512, 256, 128]
     activation: str = "elu"
 
 
@@ -190,7 +193,7 @@ class AlgorithmCfg:
     value_loss_coef: float = 1.0
     use_clipped_value_loss: bool = True
     clip_param: float = 0.2
-    entropy_coef: float = 0.01
+    entropy_coef: float = 0.005
     num_learning_epochs: int = 5
     num_mini_batches: int = 4
     learning_rate: float = 1.0e-3
@@ -203,6 +206,7 @@ class AlgorithmCfg:
 
 @configclass
 class BaseAgentCfg:
+    resume: bool = False
     num_steps_per_env: int = 24
     max_iterations: int = 50000
     save_interval: int = 100

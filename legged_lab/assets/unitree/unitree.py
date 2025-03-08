@@ -38,9 +38,9 @@ H1_CFG = ArticulationCfg(
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 1.05),
         joint_pos={
-            ".*_hip_pitch.*": -0.17,
-            ".*_knee.*": 0.5,
-            ".*_ankle.*": -0.33,
+            ".*_hip_pitch.*": -0.28,
+            ".*_knee.*": 0.79,
+            ".*_ankle.*": -0.52,
             ".*_shoulder_pitch.*": 0.20,
             ".*_elbow.*": 0.32,
         },
@@ -51,18 +51,18 @@ H1_CFG = ArticulationCfg(
         "legs": ImplicitActuatorCfg(
             joint_names_expr=[".*_hip_yaw.*", ".*_hip_roll.*", ".*_hip_pitch.*", ".*_knee.*", ".*torso.*"],
             stiffness={
-                ".*_hip_yaw.*": 150.0,
-                ".*_hip_roll.*": 150.0,
+                ".*_hip_yaw.*": 200.0,
+                ".*_hip_roll.*": 200.0,
                 ".*_hip_pitch.*": 200.0,
-                ".*_knee.*": 200.0,
-                ".*torso.*": 200.0,
+                ".*_knee.*": 300.0,
+                ".*torso.*": 300.0,
             },
             damping={
                 ".*_hip_yaw.*": 5.0,
                 ".*_hip_roll.*": 5.0,
                 ".*_hip_pitch.*": 5.0,
-                ".*_knee.*": 5.0,
-                ".*torso.*": 5.0,
+                ".*_knee.*": 6.0,
+                ".*torso.*": 6.0,
             },
         ),
         "feet": ImplicitActuatorCfg(
@@ -73,10 +73,10 @@ H1_CFG = ArticulationCfg(
         "arms": ImplicitActuatorCfg(
             joint_names_expr=[".*_shoulder_pitch.*", ".*_shoulder_roll.*", ".*_shoulder_yaw.*", ".*_elbow.*"],
             stiffness={
-                ".*_shoulder_pitch.*": 40.0,
-                ".*_shoulder_roll.*": 40.0,
-                ".*_shoulder_yaw.*": 40.0,
-                ".*_elbow.*": 40.0,
+                ".*_shoulder_pitch.*": 100.0,
+                ".*_shoulder_roll.*": 50.0,
+                ".*_shoulder_yaw.*": 50.0,
+                ".*_elbow.*": 50.0,
             },
             damping={
                 ".*_shoulder_pitch.*": 2.0,
