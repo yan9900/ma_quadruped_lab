@@ -7,17 +7,11 @@ from isaaclab.scene import InteractiveScene
 from isaaclab.assets.articulation import Articulation
 from legged_lab.envs.env_utils.scene import SceneCfg
 import numpy as np
-import isaaclab.utils.math as math_utils
 from isaaclab.managers.scene_entity_cfg import SceneEntityCfg
 from isaaclab.sensors import ContactSensor, RayCaster
 from isaaclab.envs.mdp.commands import UniformVelocityCommand, UniformVelocityCommandCfg
-from isaaclab.envs.mdp.events import (
-    randomize_rigid_body_material,
-    randomize_rigid_body_mass,
-    reset_joints_by_scale,
-    reset_root_state_uniform,
-    push_by_setting_velocity,
-)
+from isaaclab.envs.mdp.events import randomize_rigid_body_material, randomize_rigid_body_mass, reset_joints_by_scale, reset_root_state_uniform, push_by_setting_velocity
+from isaaclab.managers import RewardManager
 
 
 class BaseEnv(VecEnv):
@@ -26,6 +20,10 @@ class BaseEnv(VecEnv):
 
         self.cfg = cfg
         self.hedless = hedless
+        self.device = self.cfg.device
+        self.physics_dt = self.cfg.sim.dt
+        self.step_dt = self.cfg.sim.decimation * self.cfg.sim.dt
+        self.num_envs = self.cfg.scene.num_envs
 
         sim_cfg = sim_utils.SimulationCfg(
             device=cfg.device,
@@ -46,45 +44,7 @@ class BaseEnv(VecEnv):
         if self.cfg.scene.height_scanner.enable_height_scan:
             self.height_scanner: RayCaster = self.scene.sensors["height_scanner"]
 
-        self._init_buffers()
-
-        env_ids = torch.arange(self.num_envs, device=self.device)
-        self.apply_domain_random_at_start(env_ids)
-        self.reset(env_ids)
-
-    def _init_buffers(self):
-        self.extras = {}
-
-        self.device = self.cfg.device
-        self.physics_dt = self.cfg.sim.dt
-        self.step_dt = self.cfg.sim.decimation * self.cfg.sim.dt
-        self.num_envs = self.cfg.scene.num_envs
-
-        self.max_episode_length = np.ceil(
-            self.cfg.scene.episode_length_s / self.step_dt
-        )
-        self.default_joint_pos = self.robot.data.default_joint_pos
-        self.num_actions = self.robot.data.default_joint_pos.shape[1]
-        self.clip_actions = self.cfg.normalization.clip_actions
-        self.clip_obs = self.cfg.normalization.clip_observations
-
-        self.action_scale = self.cfg.robot.action_scale
-        self.actions = torch.zeros(
-            self.num_envs,
-            self.num_actions,
-            dtype=torch.float,
-            device=self.device,
-            requires_grad=False,
-        )
-        self.last_actions = torch.zeros(
-            self.num_envs,
-            self.num_actions,
-            dtype=torch.float,
-            device=self.device,
-            requires_grad=False,
-        )
-
-        self.command_cfg = UniformVelocityCommandCfg(
+        command_cfg = UniformVelocityCommandCfg(
             asset_name="robot",
             resampling_time_range=self.cfg.commands.resampling_time_range,
             rel_standing_envs=self.cfg.commands.rel_standing_envs,
@@ -94,32 +54,40 @@ class BaseEnv(VecEnv):
             debug_vis=self.cfg.commands.debug_vis,
             ranges=self.cfg.commands.ranges,
         )
-        self.command_generator = UniformVelocityCommand(cfg=self.command_cfg, env=self)
+        self.command_generator = UniformVelocityCommand(cfg=command_cfg, env=self)
+        self.reward_maneger = RewardManager(self.cfg.reward, self)
+
+        self._init_buffers()
+
+        env_ids = torch.arange(self.num_envs, device=self.device)
+        self.apply_domain_random_at_start(env_ids)
+        self.reset(env_ids)
+
+    def _init_buffers(self):
+        self.extras = {}
+
+        self.max_episode_length_s = self.cfg.scene.max_episode_length_s
+        self.max_episode_length = np.ceil(self.max_episode_length_s / self.step_dt)
+        self.num_actions = self.robot.data.default_joint_pos.shape[1]
+        self.clip_actions = self.cfg.normalization.clip_actions
+        self.clip_obs = self.cfg.normalization.clip_observations
+
+        self.action_scale = self.cfg.robot.action_scale
+        self.actions = torch.zeros(self.num_envs, self.num_actions, dtype=torch.float, device=self.device, requires_grad=False)
+        self.last_actions = torch.zeros(self.num_envs, self.num_actions, dtype=torch.float, device=self.device, requires_grad=False)
 
         self.robot_cfg = SceneEntityCfg(name="robot")
         self.robot_cfg.resolve(self.scene)
-        self.termination_contact_cfg = SceneEntityCfg(
-            name="contact_sensor",
-            body_names=self.cfg.robot.terminate_contacts_body_names,
-        )
+        self.termination_contact_cfg = SceneEntityCfg(name="contact_sensor", body_names=self.cfg.robot.terminate_contacts_body_names)
         self.termination_contact_cfg.resolve(self.scene)
-        self.penalize_contact_cfg = SceneEntityCfg(
-            name="contact_sensor",
-            body_names=self.cfg.robot.penalize_contacts_body_names,
-        )
-        self.penalize_contact_cfg.resolve(self.scene)
 
         self.obs_scales = self.cfg.normalization.obs_scales
         self.add_noise = self.cfg.noise.add_noise
 
         self.rew_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.float)
         self.reset_buf = torch.ones(self.num_envs, device=self.device, dtype=torch.long)
-        self.episode_length_buf = torch.zeros(
-            self.num_envs, device=self.device, dtype=torch.long
-        )
-        self.time_out_buf = torch.zeros(
-            self.num_envs, device=self.device, dtype=torch.bool
-        )
+        self.episode_length_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.long)
+        self.time_out_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
         self.noise_scale_vec = self.get_noise_scale_vec()
 
     def compute_observations(self):
@@ -131,27 +99,19 @@ class BaseEnv(VecEnv):
         joint_vel = robot.data.joint_vel - robot.data.default_joint_vel
         action = self.actions
 
-        actor_obs = torch.cat(
-            [
-                ang_vel * self.obs_scales.ang_vel,
-                projected_gravity * self.obs_scales.projected_gravity,
-                command * self.obs_scales.commands,
-                joint_pos * self.obs_scales.joint_pos,
-                joint_vel * self.obs_scales.joint_vel,
-                action * self.obs_scales.actions,
-            ],
-            dim=-1,
+        actor_obs = torch.cat([
+            ang_vel * self.obs_scales.ang_vel,
+            projected_gravity * self.obs_scales.projected_gravity,
+            command * self.obs_scales.commands,
+            joint_pos * self.obs_scales.joint_pos,
+            joint_vel * self.obs_scales.joint_vel,
+            action * self.obs_scales.actions
+        ], dim=-1,
         )
 
         if self.cfg.scene.height_scanner.enable_height_scan:
-            height_scan = (
-                self.height_scanner.data.pos_w[:, 2].unsqueeze(1)
-                - self.height_scanner.data.ray_hits_w[..., 2]
-                - self.cfg.normalization.height_scan_offset
-            )
-            actor_obs = torch.cat(
-                [actor_obs, height_scan * self.obs_scales.height_scan], dim=-1
-            )
+            height_scan = (self.height_scanner.data.pos_w[:, 2].unsqueeze(1) - self.height_scanner.data.ray_hits_w[..., 2] - self.cfg.normalization.height_scan_offset)
+            actor_obs = torch.cat([actor_obs, height_scan * self.obs_scales.height_scan], dim=-1)
         critic_obs = actor_obs.clone()
         return actor_obs, critic_obs
 
@@ -172,26 +132,24 @@ class BaseEnv(VecEnv):
         reset_joints_by_scale(
             env=self,
             env_ids=env_ids,
-            position_range=self.cfg.domain_rand.reset_robot_joints.params[
-                "position_range"
-            ],
-            velocity_range=self.cfg.domain_rand.reset_robot_joints.params[
-                "velocity_range"
-            ],
+            position_range=self.cfg.domain_rand.reset_robot_joints.params["position_range"],
+            velocity_range=self.cfg.domain_rand.reset_robot_joints.params["velocity_range"],
             asset_cfg=self.robot_cfg,
         )
         reset_root_state_uniform(
             env=self,
             env_ids=env_ids,
             pose_range=self.cfg.domain_rand.reset_robot_base.params["pose_range"],
-            velocity_range=self.cfg.domain_rand.reset_robot_base.params[
-                "velocity_range"
-            ],
+            velocity_range=self.cfg.domain_rand.reset_robot_base.params["velocity_range"],
             asset_cfg=self.robot_cfg,
         )
 
         self.command_generator.reset(env_ids)
+        reward_extras = self.reward_maneger.reset()
+        self.extras['episode'] = reward_extras
+        self.extras["time_outs"] = self.time_out_buf
 
+        self.actions[env_ids] = 0.0
         self.last_actions[env_ids] = 0.0
         self.episode_length_buf[env_ids] = 0
 
@@ -199,10 +157,8 @@ class BaseEnv(VecEnv):
         self.last_actions = self.actions.clone()
         self.actions = actions.clone()
 
-        cliped_actions = torch.clip(actions, -self.clip_actions, self.clip_actions).to(
-            self.device
-        )
-        processed_actions = cliped_actions * self.action_scale + self.default_joint_pos
+        cliped_actions = torch.clip(actions, -self.clip_actions, self.clip_actions).to(self.device)
+        processed_actions = cliped_actions * self.action_scale + self.robot.data.default_joint_pos
 
         for _ in range(self.cfg.sim.decimation):
             self.robot.set_joint_position_target(processed_actions)
@@ -230,22 +186,14 @@ class BaseEnv(VecEnv):
         self.post_physics_step_callback()
 
         self.check_termination()
-        self.compute_reward()
+        self.rew_buf = self.reward_maneger.compute(self.step_dt)
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset(env_ids)
 
     def post_physics_step_callback(self):
 
         self.command_generator.compute(self.step_dt)
-        env_ids = (
-            (
-                self.episode_length_buf
-                % int(self.cfg.domain_rand.push_robot.push_interval_s / self.step_dt)
-                == 0
-            )
-            .nonzero(as_tuple=False)
-            .flatten()
-        )
+        env_ids = ((self.episode_length_buf % int(self.cfg.domain_rand.push_robot.push_interval_s / self.step_dt) == 0).nonzero(as_tuple=False).flatten())
         push_by_setting_velocity(
             env=self,
             env_ids=env_ids,
@@ -256,61 +204,32 @@ class BaseEnv(VecEnv):
     def check_termination(self):
         net_contact_forces = self.contact_sensor.data.net_forces_w_history
 
-        self.reset_buf = torch.any(
-            torch.max(
-                torch.norm(
-                    net_contact_forces[:, :, self.termination_contact_cfg.body_ids],
-                    dim=-1,
-                ),
-                dim=1,
-            )[0]
-            > 1.0,
-            dim=1,
-        )
+        self.reset_buf = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.termination_contact_cfg.body_ids], dim=-1,), dim=1,)[0] > 1.0, dim=1)
         self.time_out_buf = self.episode_length_buf > self.max_episode_length
         self.reset_buf |= self.time_out_buf
 
     def apply_domain_random_at_start(self, env_ids):
         if self.cfg.domain_rand.randomize_robot_friction.enable:
-            self.cfg.domain_rand.randomize_robot_friction.params["asset_cfg"] = (
-                self.robot_cfg
-            )
-            rand_rb_material = randomize_rigid_body_material(
-                self.cfg.domain_rand.randomize_robot_friction, self
-            )
+            self.cfg.domain_rand.randomize_robot_friction.params["asset_cfg"] = (self.robot_cfg)
+            rand_rb_material = randomize_rigid_body_material(self.cfg.domain_rand.randomize_robot_friction, self)
             rand_rb_material(
                 env=self,
                 env_ids=env_ids,
-                static_friction_range=self.cfg.domain_rand.randomize_robot_friction.params[
-                    "static_friction_range"
-                ],
-                dynamic_friction_range=self.cfg.domain_rand.randomize_robot_friction.params[
-                    "dynamic_friction_range"
-                ],
-                restitution_range=self.cfg.domain_rand.randomize_robot_friction.params[
-                    "restitution_range"
-                ],
-                num_buckets=self.cfg.domain_rand.randomize_robot_friction.params[
-                    "num_buckets"
-                ],
-                asset_cfg=self.robot_cfg,
+                static_friction_range=self.cfg.domain_rand.randomize_robot_friction.params["static_friction_range"],
+                dynamic_friction_range=self.cfg.domain_rand.randomize_robot_friction.params["dynamic_friction_range"],
+                restitution_range=self.cfg.domain_rand.randomize_robot_friction.params["restitution_range"],
+                num_buckets=self.cfg.domain_rand.randomize_robot_friction.params["num_buckets"],
+                asset_cfg=self.robot_cfg
             )
 
         if self.cfg.domain_rand.add_rigid_body_mass:
-            robot_cfg = SceneEntityCfg(
-                name="robot",
-                body_names=self.cfg.domain_rand.add_rigid_body_mass.params[
-                    "body_names"
-                ],
-            )
+            robot_cfg = SceneEntityCfg(name="robot", body_names=self.cfg.domain_rand.add_rigid_body_mass.params["body_names"])
             robot_cfg.resolve(self.scene)
             randomize_rigid_body_mass(
                 env=self,
                 env_ids=env_ids,
                 asset_cfg=robot_cfg,
-                mass_distribution_params=self.cfg.domain_rand.add_rigid_body_mass.params[
-                    "mass_distribution_params"
-                ],
+                mass_distribution_params=self.cfg.domain_rand.add_rigid_body_mass.params["mass_distribution_params"],
                 operation=self.cfg.domain_rand.add_rigid_body_mass.params["operation"],
             )
 
@@ -320,24 +239,11 @@ class BaseEnv(VecEnv):
         noise_scales = self.cfg.noise.noise_scales
         noise_level = self.cfg.noise.noise_level
         noise_vec[:3] = noise_scales.ang_vel * noise_level * self.obs_scales.ang_vel
-        noise_vec[3:6] = (
-            noise_scales.projected_gravity
-            * noise_level
-            * self.obs_scales.projected_gravity
-        )
+        noise_vec[3:6] = (noise_scales.projected_gravity * noise_level * self.obs_scales.projected_gravity)
         noise_vec[6:9] = 0
-        noise_vec[9 : 9 + self.num_actions] = (
-            noise_scales.joint_pos * noise_level * self.obs_scales.joint_pos
-        )
-        noise_vec[9 + self.num_actions : 9 + self.num_actions * 2] = (
-            noise_scales.joint_vel * noise_level * self.obs_scales.joint_vel
-        )
+        noise_vec[9 : 9 + self.num_actions] = (noise_scales.joint_pos * noise_level * self.obs_scales.joint_pos)
+        noise_vec[9 + self.num_actions : 9 + self.num_actions * 2] = (noise_scales.joint_vel * noise_level * self.obs_scales.joint_vel)
         noise_vec[9 + self.num_actions * 2 : 9 + self.num_actions * 3] = 0.0
         if self.cfg.scene.height_scanner.enable_height_scan:
-            noise_vec[9 + self.num_actions * 3 :] = (
-                noise_scales.height_scan * noise_level * self.obs_scales.height_scan
-            )
+            noise_vec[9 + self.num_actions * 3 :] = (noise_scales.height_scan * noise_level * self.obs_scales.height_scan)
         return noise_vec
-
-    def compute_reward(self):
-        pass

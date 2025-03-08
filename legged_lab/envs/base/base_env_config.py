@@ -1,6 +1,7 @@
 from .base_config import BaseConfig
 from dataclasses import MISSING
 import math
+from isaaclab.utils import configclass
 
 
 class BaseEnvConfig(BaseConfig):
@@ -14,7 +15,7 @@ class BaseEnvConfig(BaseConfig):
             size = (1.6, 1.0)
             debug_vis = False
 
-        episode_length_s = 20.0
+        max_episode_length_s = 20.0
         num_envs = 4096
         env_spacing = 2.5
         robot = MISSING
@@ -24,8 +25,11 @@ class BaseEnvConfig(BaseConfig):
 
     class robot:
         action_scale = 0.25
-        penalize_contacts_body_names = []
         terminate_contacts_body_names = []
+
+    @configclass
+    class reward:
+        pass
 
     class normalization:
         class obs_scales:
@@ -134,8 +138,8 @@ class BaseAgentConfig(BaseConfig):
     class policy:
         class_name = "ActorCritic"
         init_noise_std = 1.0
-        actor_hidden_dims = [512, 256, 128]
-        critic_hidden_dims = [512, 256, 128]
+        actor_hidden_dims = [256, 256, 128]
+        critic_hidden_dims = [256, 256, 128]
         activation = "elu"
 
     class algorithm:
