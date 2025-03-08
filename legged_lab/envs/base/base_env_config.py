@@ -4,12 +4,12 @@ from isaaclab.utils import configclass
 
 
 @configclass
-class RewardConfig:
+class RewardCfg:
     pass
 
 
 @configclass
-class HeightScannerConfig:
+class HeightScannerCfg:
     enable_height_scan: bool = False
     prim_body_name: str = MISSING
     resolution: float = 0.1
@@ -18,7 +18,7 @@ class HeightScannerConfig:
 
 
 @configclass
-class SceneConfig:
+class SceneCfg:
     max_episode_length_s: float = 20.0
     num_envs: int = 4096
     env_spacing: float = 2.5
@@ -26,17 +26,17 @@ class SceneConfig:
     terrain_type: str = MISSING
     terrain_generator: str = MISSING
     max_init_terrain_level: int = 5
-    height_scanner: HeightScannerConfig = HeightScannerConfig()
+    height_scanner: HeightScannerCfg = HeightScannerCfg()
 
 
 @configclass
-class RobotConfig:
+class RobotCfg:
     action_scale: float = 0.25
     terminate_contacts_body_names: list = []
 
 
 @configclass
-class ObsScalesConfig:
+class ObsScalesCfg:
     ang_vel: float = 1.0
     projected_gravity: float = 1.0
     commands: float = 1.0
@@ -47,15 +47,15 @@ class ObsScalesConfig:
 
 
 @configclass
-class NormalizationConfig:
-    obs_scales: ObsScalesConfig = ObsScalesConfig()
+class NormalizationCfg:
+    obs_scales: ObsScalesCfg = ObsScalesCfg()
     clip_observations: float = 100.0
     clip_actions: float = 100.0
     height_scan_offset: float = 0.5
 
 
 @configclass
-class CommandRangesConfig:
+class CommandRangesCfg:
     lin_vel_x: tuple = (-1.0, 1.0)
     lin_vel_y: tuple = (-0.6, 0.6)
     ang_vel_z: tuple = (-1.0, 1.0)
@@ -63,18 +63,18 @@ class CommandRangesConfig:
 
 
 @configclass
-class CommandsConfig:
+class CommandsCfg:
     resampling_time_range: tuple = (10.0, 10.0)
     rel_standing_envs: float = 0.2
     rel_heading_envs: float = 1.0
     heading_command: bool = True
     heading_control_stiffness: float = 0.5
     debug_vis: bool = True
-    ranges: CommandRangesConfig = CommandRangesConfig()
+    ranges: CommandRangesCfg = CommandRangesCfg()
 
 
 @configclass
-class NoiseScalesConfig:
+class NoiseScalesCfg:
     ang_vel: float = 0.2
     projected_gravity: float = 0.05
     joint_pos: float = 0.01
@@ -83,19 +83,19 @@ class NoiseScalesConfig:
 
 
 @configclass
-class NoiseConfig:
+class NoiseCfg:
     add_noise: bool = True
     noise_level: float = 1.0
-    noise_scales: NoiseScalesConfig = NoiseScalesConfig()
+    noise_scales: NoiseScalesCfg = NoiseScalesCfg()
 
 
 @configclass
-class ResetRobotJointsConfig:
+class ResetRobotJointsCfg:
     params: dict = {"position_range": (0.5, 1.5), "velocity_range": (0.0, 0.0)}
 
 
 @configclass
-class ResetRobotBaseConfig:
+class ResetRobotBaseCfg:
     params: dict = {
         "pose_range": {
             "x": (-0.5, 0.5),
@@ -114,7 +114,7 @@ class ResetRobotBaseConfig:
 
 
 @configclass
-class RandomizeRobotFrictionConfig:
+class RandomizeRobotFrictionCfg:
     enable: bool = True
     params: dict = {
         "static_friction_range": [0.6, 1.0],
@@ -125,7 +125,7 @@ class RandomizeRobotFrictionConfig:
 
 
 @configclass
-class AddRigidBodyMassConfig:
+class AddRigidBodyMassCfg:
     enable: bool = True
     params: dict = {
         "body_names": MISSING,
@@ -135,47 +135,48 @@ class AddRigidBodyMassConfig:
 
 
 @configclass
-class PushRobotConfig:
+class PushRobotCfg:
     enable: bool = True
     push_interval_s: float = 15.0
     params: dict = {"velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0)}}
 
 
 @configclass
-class DomainRandConfig:
-    reset_robot_joints: ResetRobotJointsConfig = ResetRobotJointsConfig()
-    reset_robot_base: ResetRobotBaseConfig = ResetRobotBaseConfig()
-    randomize_robot_friction: RandomizeRobotFrictionConfig = RandomizeRobotFrictionConfig()
-    add_rigid_body_mass: AddRigidBodyMassConfig = AddRigidBodyMassConfig()
-    push_robot: PushRobotConfig = PushRobotConfig()
+class DomainRandCfg:
+    reset_robot_joints: ResetRobotJointsCfg = ResetRobotJointsCfg()
+    reset_robot_base: ResetRobotBaseCfg = ResetRobotBaseCfg()
+    randomize_robot_friction: RandomizeRobotFrictionCfg = RandomizeRobotFrictionCfg()
+    add_rigid_body_mass: AddRigidBodyMassCfg = AddRigidBodyMassCfg()
+    push_robot: PushRobotCfg = PushRobotCfg()
 
 
 @configclass
-class PhysxConfig:
+class PhysxCfg:
     gpu_max_rigid_patch_count: int = 10 * 2**15
 
 
 @configclass
-class SimConfig:
+class SimCfg:
     dt: float = 0.005
     decimation: int = 4
-    physx: PhysxConfig = PhysxConfig()
+    physx: PhysxCfg = PhysxCfg()
+
 
 @configclass
-class BaseEnvConfig:
+class BaseEnvCfg:
     device: str = "cuda:0"
-    scene: SceneConfig = SceneConfig()
-    robot: RobotConfig = RobotConfig()
-    reward: RewardConfig = RewardConfig()
-    normalization: NormalizationConfig = NormalizationConfig()
-    commands: CommandsConfig = CommandsConfig()
-    noise: NoiseConfig = NoiseConfig()
-    domain_rand: DomainRandConfig = DomainRandConfig()
-    sim: SimConfig = SimConfig()
+    scene: SceneCfg = SceneCfg()
+    robot: RobotCfg = RobotCfg()
+    reward: RewardCfg = RewardCfg()
+    normalization: NormalizationCfg = NormalizationCfg()
+    commands: CommandsCfg = CommandsCfg()
+    noise: NoiseCfg = NoiseCfg()
+    domain_rand: DomainRandCfg = DomainRandCfg()
+    sim: SimCfg = SimCfg()
 
 
 @configclass
-class PolicyConfig:
+class PolicyCfg:
     class_name: str = "ActorCritic"
     init_noise_std: float = 1.0
     actor_hidden_dims: list = [256, 256, 128]
@@ -184,7 +185,7 @@ class PolicyConfig:
 
 
 @configclass
-class AlgorithmConfig:
+class AlgorithmCfg:
     class_name: str = "PPO"
     value_loss_coef: float = 1.0
     use_clipped_value_loss: bool = True
@@ -199,8 +200,9 @@ class AlgorithmConfig:
     desired_kl: float = 0.01
     max_grad_norm: float = 1.0
 
+
 @configclass
-class BaseAgentConfig:
+class BaseAgentCfg:
     num_steps_per_env: int = 24
     max_iterations: int = 50000
     save_interval: int = 100
@@ -212,5 +214,5 @@ class BaseAgentConfig:
     wandb_project: str = MISSING
     load_run: str = ".*"
     load_checkpoint: str = "model_.*.pt"
-    policy: PolicyConfig = PolicyConfig()
-    algorithm: AlgorithmConfig = AlgorithmConfig()
+    policy: PolicyCfg = PolicyCfg()
+    algorithm: AlgorithmCfg = AlgorithmCfg()

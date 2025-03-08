@@ -1,6 +1,6 @@
 from legged_lab.envs.base.base_env_config import (
-    BaseEnvConfig, BaseAgentConfig, SceneConfig, RobotConfig, DomainRandConfig,
-    RewardConfig, HeightScannerConfig, AddRigidBodyMassConfig, PhysxConfig, SimConfig
+    BaseEnvCfg, BaseAgentCfg, SceneCfg, RobotCfg, DomainRandCfg,
+    RewardCfg, HeightScannerCfg, AddRigidBodyMassCfg, PhysxCfg, SimCfg
 )
 from legged_lab.assets.unitree import H1_CFG
 from legged_lab.terrains import GRAVEL_TERRAINS_CFG
@@ -11,8 +11,8 @@ from isaaclab.utils import configclass
 
 
 @configclass
-class H1SceneConfig(SceneConfig):
-    height_scanner: HeightScannerConfig = HeightScannerConfig(
+class H1SceneCfg(SceneCfg):
+    height_scanner: HeightScannerCfg = HeightScannerCfg(
         prim_body_name="torso_link"
     )
     robot: str = H1_CFG
@@ -21,13 +21,13 @@ class H1SceneConfig(SceneConfig):
 
 
 @configclass
-class H1RobotConfig(RobotConfig):
+class H1RobotCfg(RobotCfg):
     terminate_contacts_body_names: list = [".*torso.*"]
 
 
 @configclass
-class H1DomainRandConfig(DomainRandConfig):
-    add_rigid_body_mass: AddRigidBodyMassConfig = AddRigidBodyMassConfig(
+class H1DomainRandCfg(DomainRandCfg):
+    add_rigid_body_mass: AddRigidBodyMassCfg = AddRigidBodyMassCfg(
         enable=True,
         params={
             "body_names": [".*torso.*"],
@@ -38,7 +38,7 @@ class H1DomainRandConfig(DomainRandConfig):
 
 
 @configclass
-class H1RewardConfig(RewardConfig):
+class H1RewardCfg(RewardCfg):
     track_lin_vel_xy_exp: RewTerm = RewTerm(func=mdp.track_lin_vel_xy_yaw_frame_exp, weight=1.0, params={"std": 0.5})
     track_ang_vel_z_exp: RewTerm = RewTerm(func=mdp.track_ang_vel_z_world_exp, weight=1.0, params={"std": 0.5})
     lin_vel_z_l2: RewTerm = RewTerm(func=mdp.lin_vel_z_l2, weight=-1.0)
@@ -60,20 +60,21 @@ class H1RewardConfig(RewardConfig):
 
 
 @configclass
-class H1SimConfig(SimConfig):
-    physx: PhysxConfig = PhysxConfig(gpu_max_rigid_patch_count=10 * 2**15)
+class H1SimCfg(SimCfg):
+    physx: PhysxCfg = PhysxCfg(gpu_max_rigid_patch_count=10 * 2**15)
 
 
 @configclass
-class H1FlatEnvCfg(BaseEnvConfig):
-    scene: H1SceneConfig = H1SceneConfig()
-    robot: H1RobotConfig = H1RobotConfig()
-    domain_rand: H1DomainRandConfig = H1DomainRandConfig()
-    reward: H1RewardConfig = H1RewardConfig()
-    sim: H1SimConfig = H1SimConfig()
+class H1FlatEnvCfg(BaseEnvCfg):
+    scene: H1SceneCfg = H1SceneCfg()
+    robot: H1RobotCfg = H1RobotCfg()
+    domain_rand: H1DomainRandCfg = H1DomainRandCfg()
+    reward: H1RewardCfg = H1RewardCfg()
+    sim: H1SimCfg = H1SimCfg()
+
 
 @configclass
-class H1FlatAgentCfg(BaseAgentConfig):
+class H1FlatAgentCfg(BaseAgentCfg):
     experiment_name: str = "h1_flat"
     wandb_project: str = "h1_flat"
     num_steps_per_env: int = 24

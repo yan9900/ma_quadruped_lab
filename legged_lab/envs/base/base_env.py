@@ -1,4 +1,4 @@
-from legged_lab.envs.base.base_env_config import BaseEnvConfig
+from legged_lab.envs.base.base_env_config import BaseEnvCfg
 import torch
 from rsl_rl.env import VecEnv
 import isaaclab.sim as sim_utils
@@ -15,8 +15,8 @@ from isaaclab.managers import RewardManager
 
 
 class BaseEnv(VecEnv):
-    def __init__(self, cfg: BaseEnvConfig, hedless):
-        self.cfg: BaseEnvConfig
+    def __init__(self, cfg: BaseEnvCfg, hedless):
+        self.cfg: BaseEnvCfg
 
         self.cfg = cfg
         self.hedless = hedless
