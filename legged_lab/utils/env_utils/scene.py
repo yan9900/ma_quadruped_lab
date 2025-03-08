@@ -9,7 +9,7 @@ from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR, ISAAC_NUCLEUS_DIR
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from legged_lab.envs.base.base_env_config import BaseEnvConfig
+    from legged_lab.envs.base.base_env_config import BaseSceneCfg
 
 
 @configclass
@@ -18,7 +18,7 @@ class SceneCfg(InteractiveSceneCfg):
 
     def __init__(
         self,
-        config: "BaseEnvConfig.scene",
+        config: "BaseSceneCfg",
     ):
         super().__init__(num_envs=config.num_envs, env_spacing=config.env_spacing)
 

@@ -1,9 +1,9 @@
 from legged_lab.envs.base.base_env_config import (  # noqa:F401
-    BaseEnvCfg, BaseAgentCfg, SceneCfg, RobotCfg, DomainRandCfg,
+    BaseEnvCfg, BaseAgentCfg, BaseSceneCfg, RobotCfg, DomainRandCfg,
     RewardCfg, HeightScannerCfg, AddRigidBodyMassCfg, PhysxCfg, SimCfg
 )
 from legged_lab.assets.agility import CASSIE_CFG
-from legged_lab.terrains import GRAVEL_TERRAINS_CFG
+from legged_lab.terrains import GRAVEL_TERRAINS_CFG, ROUGH_TERRAINS_CFG
 from isaaclab.managers import RewardTermCfg as RewTerm
 import legged_lab.mdp as mdp
 from isaaclab.managers.scene_entity_cfg import SceneEntityCfg
@@ -11,7 +11,7 @@ from isaaclab.utils import configclass
 
 
 @configclass
-class CASSIESceneCfg(SceneCfg):
+class CassieSceneCfg(BaseSceneCfg):
     height_scanner: HeightScannerCfg = HeightScannerCfg(
         enable_height_scan=False,
         prim_body_name="pelvis"
@@ -22,13 +22,13 @@ class CASSIESceneCfg(SceneCfg):
 
 
 @configclass
-class CASSIERobotCfg(RobotCfg):
+class CassieRobotCfg(RobotCfg):
     terminate_contacts_body_names: list = ["pelvis"]
     feet_names: list = [".*toe"]
 
 
 @configclass
-class CASSIEDomainRandCfg(DomainRandCfg):
+class CassieDomainRandCfg(DomainRandCfg):
     add_rigid_body_mass: AddRigidBodyMassCfg = AddRigidBodyMassCfg(
         enable=True,
         params={
@@ -40,7 +40,7 @@ class CASSIEDomainRandCfg(DomainRandCfg):
 
 
 @configclass
-class CASSIERewardCfg(RewardCfg):
+class CassieRewardCfg(RewardCfg):
     track_lin_vel_xy_exp: RewTerm = RewTerm(func=mdp.track_lin_vel_xy_yaw_frame_exp, weight=1.0, params={"std": 0.5})
     track_ang_vel_z_exp: RewTerm = RewTerm(func=mdp.track_ang_vel_z_world_exp, weight=1.0, params={"std": 0.5})
     lin_vel_z_l2: RewTerm = RewTerm(func=mdp.lin_vel_z_l2, weight=-1.0)
@@ -61,14 +61,34 @@ class CASSIERewardCfg(RewardCfg):
 
 
 @configclass
-class CASSIEFlatEnvCfg(BaseEnvCfg):
-    scene: CASSIESceneCfg = CASSIESceneCfg()
-    robot: CASSIERobotCfg = CASSIERobotCfg()
-    domain_rand: CASSIEDomainRandCfg = CASSIEDomainRandCfg()
-    reward: CASSIERewardCfg = CASSIERewardCfg()
+class CassieFlatEnvCfg(BaseEnvCfg):
+    scene: CassieSceneCfg = CassieSceneCfg()
+    robot: CassieRobotCfg = CassieRobotCfg()
+    domain_rand: CassieDomainRandCfg = CassieDomainRandCfg()
+    reward: CassieRewardCfg = CassieRewardCfg()
 
 
 @configclass
-class CASSIEFlatAgentCfg(BaseAgentCfg):
+class CassieFlatAgentCfg(BaseAgentCfg):
     experiment_name: str = "cassie_flat"
     wandb_project: str = "cassie_flat"
+
+
+@configclass
+class CassieRoughEnvCfg(BaseEnvCfg):
+    scene: CassieSceneCfg = CassieSceneCfg(
+        height_scanner=HeightScannerCfg(
+            enable_height_scan=True,
+            prim_body_name="pelvis"
+        ),
+        terrain_generator=ROUGH_TERRAINS_CFG
+    )
+    robot: CassieRobotCfg = CassieRobotCfg()
+    domain_rand: CassieDomainRandCfg = CassieDomainRandCfg()
+    reward: CassieRewardCfg = CassieRewardCfg()
+
+
+@configclass
+class CassieRoughAgentCfg(BaseAgentCfg):
+    experiment_name: str = "cassie_rough"
+    wandb_project: str = "cassie_rough"

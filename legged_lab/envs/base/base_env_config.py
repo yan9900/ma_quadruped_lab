@@ -18,7 +18,7 @@ class HeightScannerCfg:
 
 
 @configclass
-class SceneCfg:
+class BaseSceneCfg:
     max_episode_length_s: float = 20.0
     num_envs: int = 4096
     env_spacing: float = 2.5
@@ -40,6 +40,7 @@ class RobotCfg:
 
 @configclass
 class ObsScalesCfg:
+    lin_vel: float = 1.0
     ang_vel: float = 1.0
     projected_gravity: float = 1.0
     commands: float = 1.0
@@ -168,7 +169,7 @@ class SimCfg:
 @configclass
 class BaseEnvCfg:
     device: str = "cuda:0"
-    scene: SceneCfg = SceneCfg()
+    scene: BaseSceneCfg = BaseSceneCfg()
     robot: RobotCfg = RobotCfg()
     reward: RewardCfg = RewardCfg()
     normalization: NormalizationCfg = NormalizationCfg()

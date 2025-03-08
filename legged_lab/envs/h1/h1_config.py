@@ -1,9 +1,9 @@
 from legged_lab.envs.base.base_env_config import (  # noqa:F401
-    BaseEnvCfg, BaseAgentCfg, SceneCfg, RobotCfg, DomainRandCfg,
+    BaseEnvCfg, BaseAgentCfg, BaseSceneCfg, RobotCfg, DomainRandCfg,
     RewardCfg, HeightScannerCfg, AddRigidBodyMassCfg, PhysxCfg, SimCfg
 )
 from legged_lab.assets.unitree import H1_CFG
-from legged_lab.terrains import GRAVEL_TERRAINS_CFG
+from legged_lab.terrains import GRAVEL_TERRAINS_CFG, ROUGH_TERRAINS_CFG
 from isaaclab.managers import RewardTermCfg as RewTerm
 import legged_lab.mdp as mdp
 from isaaclab.managers.scene_entity_cfg import SceneEntityCfg
@@ -11,7 +11,7 @@ from isaaclab.utils import configclass
 
 
 @configclass
-class H1SceneCfg(SceneCfg):
+class H1SceneCfg(BaseSceneCfg):
     height_scanner: HeightScannerCfg = HeightScannerCfg(
         enable_height_scan=False,
         prim_body_name="torso_link"
@@ -73,3 +73,23 @@ class H1FlatEnvCfg(BaseEnvCfg):
 class H1FlatAgentCfg(BaseAgentCfg):
     experiment_name: str = "h1_flat"
     wandb_project: str = "h1_flat"
+
+
+@configclass
+class H1RoughEnvCfg(BaseEnvCfg):
+    scene: H1SceneCfg = H1SceneCfg(
+        height_scanner=HeightScannerCfg(
+            enable_height_scan=True,
+            prim_body_name="torso_link"
+        ),
+        terrain_generator=ROUGH_TERRAINS_CFG
+    )
+    robot: H1RobotCfg = H1RobotCfg()
+    domain_rand: H1DomainRandCfg = H1DomainRandCfg()
+    reward: H1RewardCfg = H1RewardCfg()
+
+
+@configclass
+class H1RoughAgentCfg(BaseAgentCfg):
+    experiment_name: str = "h1_rough"
+    wandb_project: str = "h1_rough"
