@@ -34,10 +34,12 @@ from legged_lab.utils.keyboard import Keyboard
 
 def train():
     runner: OnPolicyRunner
+    env_cfg: BaseEnvCfg  # noqa:F405
 
     env_class_name = args_cli.task
     env_cfg, agent_cfg = task_registry.get_cfgs(env_class_name)
 
+    env_cfg.noise.add_noise = False
     env_cfg.scene.num_envs = 50
     env_cfg.scene.env_spacing = 2.5
     env_cfg.commands.ranges.lin_vel_x = (0.6, 0.6)

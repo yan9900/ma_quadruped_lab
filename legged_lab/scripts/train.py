@@ -29,6 +29,12 @@ from legged_lab.utils.cli_args import update_rsl_rl_cfg
 
 import os
 from datetime import datetime
+import torch
+
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+torch.backends.cudnn.deterministic = False
+torch.backends.cudnn.benchmark = False
 
 
 def train():

@@ -116,7 +116,8 @@ class BaseEnv(VecEnv):
         return actor_obs, critic_obs
 
     def add_noise_to_obs(self, obs):
-        return (2 * torch.rand_like(obs) - 1) * self.noise_scale_vec
+        obs += (2 * torch.rand_like(obs) - 1) * self.noise_scale_vec
+        return obs
 
     def get_observations(self):
         self.sim.step(render=False)
@@ -145,7 +146,7 @@ class BaseEnv(VecEnv):
         )
 
         self.command_generator.reset(env_ids)
-        reward_extras = self.reward_maneger.reset()
+        reward_extras = self.reward_maneger.reset(env_ids)
         self.extras['episode'] = reward_extras
         self.extras["time_outs"] = self.time_out_buf
 
@@ -193,13 +194,14 @@ class BaseEnv(VecEnv):
     def post_physics_step_callback(self):
 
         self.command_generator.compute(self.step_dt)
-        env_ids = ((self.episode_length_buf % int(self.cfg.domain_rand.push_robot.push_interval_s / self.step_dt) == 0).nonzero(as_tuple=False).flatten())
-        push_by_setting_velocity(
-            env=self,
-            env_ids=env_ids,
-            velocity_range=self.cfg.domain_rand.push_robot.params["velocity_range"],
-            asset_cfg=self.robot_cfg,
-        )
+        if self.cfg.domain_rand.push_robot.enable:
+            env_ids = ((self.episode_length_buf % int(self.cfg.domain_rand.push_robot.push_interval_s / self.step_dt) == 0).nonzero(as_tuple=False).flatten())
+            push_by_setting_velocity(
+                env=self,
+                env_ids=env_ids,
+                velocity_range=self.cfg.domain_rand.push_robot.params["velocity_range"],
+                asset_cfg=self.robot_cfg,
+            )
 
     def check_termination(self):
         net_contact_forces = self.contact_sensor.data.net_forces_w_history
