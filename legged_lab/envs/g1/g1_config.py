@@ -1,4 +1,4 @@
-from legged_lab.envs.base.base_env_config import (
+from legged_lab.envs.base.base_env_config import (  # noqa:F401
     BaseEnvCfg, BaseAgentCfg, SceneCfg, RobotCfg, DomainRandCfg,
     RewardCfg, HeightScannerCfg, AddRigidBodyMassCfg, PhysxCfg, SimCfg
 )
