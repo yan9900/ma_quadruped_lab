@@ -1,5 +1,6 @@
 from .base_config import BaseConfig
 from dataclasses import MISSING
+import math
 
 
 class BaseEnvConfig(BaseConfig):
@@ -36,19 +37,23 @@ class BaseEnvConfig(BaseConfig):
             actions = 1.0
             height_scan = 1.0
 
-        clip_observations = 100.
-        clip_actions = 100.
+        clip_observations = 100.0
+        clip_actions = 100.0
         height_scan_offset = 0.5
 
     class commands:
-        class ranges:
-            lin_vel_x = [-1.0, 1.0]
-            lin_vel_y = [-1.0, 1.0]
-            ang_vel_yaw = [-1.57, 1.57]
-            heading = [-3.14, 3.14]
-
-        resampe_time_s = 10.
+        resampling_time_range = (10.0, 10.0)
+        rel_standing_envs = 0.2
+        rel_heading_envs = 1.0
         heading_command = True
+        heading_control_stiffness = 0.5
+        debug_vis = True
+
+        class ranges:
+            lin_vel_x = (-1.0, 1.0)
+            lin_vel_y = (-0.6, 0.6)
+            ang_vel_z = (-1.0, 1.0)
+            heading = (-math.pi, math.pi)
 
     class noise:
         add_noise = True
@@ -64,12 +69,15 @@ class BaseEnvConfig(BaseConfig):
     class domain_rand:
 
         class reset_robot_joints:
-            params = {"position_range": (0.5, 1.5),
-                      "velocity_range": (0.0, 0.0)}
+            params = {"position_range": (0.5, 1.5), "velocity_range": (0.0, 0.0)}
 
         class reset_robot_base:
             params = {
-                "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
+                "pose_range": {
+                    "x": (-0.5, 0.5),
+                    "y": (-0.5, 0.5),
+                    "yaw": (-3.14, 3.14),
+                },
                 "velocity_range": {
                     "x": (-0.5, 0.5),
                     "y": (-0.5, 0.5),
@@ -77,25 +85,29 @@ class BaseEnvConfig(BaseConfig):
                     "roll": (-0.5, 0.5),
                     "pitch": (-0.5, 0.5),
                     "yaw": (-0.5, 0.5),
-                }
+                },
             }
 
         class randomize_robot_friction:
             enable = True
-            params = {"static_friction_range": [0.6, 1.0],
-                      "dynamic_friction_range" : [0.4, 0.8],
-                      "restitution_range" : [0.0, 0.005],
-                      "num_buckets" : 64}
+            params = {
+                "static_friction_range": [0.6, 1.0],
+                "dynamic_friction_range": [0.4, 0.8],
+                "restitution_range": [0.0, 0.005],
+                "num_buckets": 64,
+            }
 
         class add_rigid_body_mass:
             enable = True
-            params = {"body_names": MISSING,
-                      "mass_distribution_params": (-5.0, 5.0),
-                      "operation": "add"}
+            params = {
+                "body_names": MISSING,
+                "mass_distribution_params": (-5.0, 5.0),
+                "operation": "add",
+            }
 
         class push_robot:
             enable = True
-            push_interval_s = 15.
+            push_interval_s = 15.0
             params = {"velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0)}}
 
     class sim:

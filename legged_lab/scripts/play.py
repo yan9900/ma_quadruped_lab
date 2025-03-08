@@ -41,6 +41,9 @@ def train():
 
     env_cfg.scene.num_envs = 50
     env_cfg.scene.env_spacing = 2.5
+    env_cfg.commands.ranges.lin_vel_x = (0.6, 0.6)
+    env_cfg.commands.ranges.lin_vel_y = (0.0, 0.0)
+    env_cfg.commands.ranges.heading = (0.0, 0.0)
 
     if env_cfg.scene.terrain_generator is not None:
         env_cfg.scene.terrain_generator.num_rows = 5
