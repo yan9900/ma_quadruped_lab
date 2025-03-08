@@ -29,7 +29,6 @@ from isaaclab_rl.rsl_rl import export_policy_as_jit, export_policy_as_onnx
 import isaacsim.core.utils.torch as torch_utils
 from legged_lab.envs import *  # noqa:F401, F403
 from isaaclab_tasks.utils import get_checkpoint_path
-
 from legged_lab.utils.keyboard import Keyboard
 
 
@@ -62,8 +61,7 @@ def train():
     resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
     log_dir = os.path.dirname(resume_path)
 
-    agent_cfg = cli_args.class_to_dict(agent_cfg)
-    runner = OnPolicyRunner(env, agent_cfg, log_dir=log_dir, device=agent_cfg['device'])
+    runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg['device'])
     runner.load(resume_path, load_optimizer=False)
 
     policy = runner.get_inference_policy(device=env.device)

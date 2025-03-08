@@ -52,21 +52,3 @@ def update_rsl_rl_cfg(agent_cfg: BaseAgentConfig, args_cli: argparse.Namespace):
         agent_cfg.neptune_project = args_cli.log_project_name
 
     return agent_cfg
-
-
-def class_to_dict(obj) -> dict:
-    if not hasattr(obj, "__dict__"):
-        return obj
-    result = {}
-    for key in dir(obj):
-        if key.startswith("_"):
-            continue
-        element = []
-        val = getattr(obj, key)
-        if isinstance(val, list):
-            for item in val:
-                element.append(class_to_dict(item))
-        else:
-            element = class_to_dict(val)
-        result[key] = element
-    return result

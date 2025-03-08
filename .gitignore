@@ -4,3 +4,4 @@
 outputs
 logs
 run_bash.sh
+wandb

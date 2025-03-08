@@ -84,7 +84,7 @@ class BaseEnv(VecEnv):
         self.obs_scales = self.cfg.normalization.obs_scales
         self.add_noise = self.cfg.noise.add_noise
 
-        self.rew_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.float)
+        self.reward_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.float)
         self.reset_buf = torch.ones(self.num_envs, device=self.device, dtype=torch.long)
         self.episode_length_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.long)
         self.time_out_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
@@ -179,14 +179,14 @@ class BaseEnv(VecEnv):
         cliped_critic_obs = torch.clip(critic_obs, -self.clip_obs, self.clip_obs)
         self.extras["observations"] = {"critic": cliped_critic_obs}
 
-        return cliped_actor_obs, self.rew_buf, self.reset_buf, self.extras
+        return cliped_actor_obs, self.reward_buf, self.reset_buf, self.extras
 
     def post_physics_step(self):
         self.episode_length_buf += 1
         self.post_physics_step_callback()
 
         self.check_termination()
-        self.rew_buf = self.reward_maneger.compute(self.step_dt)
+        self.reward_buf = self.reward_maneger.compute(self.step_dt)
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset(env_ids)
 

@@ -1,10 +1,6 @@
 from typing import Tuple
-import os
-from datetime import datetime
 from rsl_rl.env import VecEnv
-from rsl_rl.runners import OnPolicyRunner
 from typing import TYPE_CHECKING
-from .cli_args import update_rsl_rl_cfg, class_to_dict
 
 if TYPE_CHECKING:
     from legged_lab.envs.base.base_env import BaseEnvConfig
