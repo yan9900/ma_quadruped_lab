@@ -1,1 +1,1 @@
-from legged_lab.assets.unitree.unitree import H1_CFG
+from legged_lab.assets.unitree.unitree import *

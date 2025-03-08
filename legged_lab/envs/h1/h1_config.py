@@ -13,6 +13,7 @@ from isaaclab.utils import configclass
 @configclass
 class H1SceneCfg(SceneCfg):
     height_scanner: HeightScannerCfg = HeightScannerCfg(
+        enable_height_scan=False,
         prim_body_name="torso_link"
     )
     robot: str = H1_CFG
@@ -72,5 +73,3 @@ class H1FlatEnvCfg(BaseEnvCfg):
 class H1FlatAgentCfg(BaseAgentCfg):
     experiment_name: str = "h1_flat"
     wandb_project: str = "h1_flat"
-    num_steps_per_env: int = 24
-    max_iterations: int = 50000

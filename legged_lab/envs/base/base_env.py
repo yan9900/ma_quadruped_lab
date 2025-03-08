@@ -175,6 +175,7 @@ class BaseEnv(VecEnv):
 
         self.actor_obs_buffer.reset(env_ids)
         self.critic_obs_buffer.reset(env_ids)
+        self.actions[env_ids] = 0.
         self.last_actions[env_ids] = 0.
         self.episode_length_buf[env_ids] = 0
 
