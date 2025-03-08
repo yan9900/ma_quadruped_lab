@@ -10,6 +10,18 @@ class H1FlatEnvCfg(BaseEnvConfig):
         terrain_type = "generator"
         terrain_generator = GRAVEL_TERRAINS_CFG
 
+    class robot(BaseEnvConfig.robot):
+        penalize_contacts_body_names = [".*knee.*"]
+        terminate_contacts_body_names = [".*torso.*"]
+
+    class domain_rand(BaseEnvConfig.domain_rand):
+
+        class add_rigid_body_mass:
+            enable = True
+            params = {"body_names": [".*torso.*"],
+                      "mass_distribution_params": (-5.0, 5.0),
+                      "operation": "add"}
+
 
 class H1FlatAgentCfg(BaseAgentConfig):
     experiment_name = "h1_falt"

@@ -14,42 +14,86 @@ class BaseEnvConfig(BaseConfig):
         terrain_generator = MISSING
         max_init_terrain_level = 5
 
-    class normalization:
+    class robot:
+        action_scale = 0.25
+        penalize_contacts_body_names = []
+        terminate_contacts_body_names = []
 
+    class normalization:
         class obs_scales:
-            lin_vel = 1.0
             ang_vel = 1.0
-            dof_pos = 1.0
-            dof_vel = 1.0
-            height_measurements = 1.0
+            projected_gravity = 1.0
+            commands = 1.0
+            joint_pos = 1.0
+            joint_vel = 1.0
+            actions = 1.0
 
         clip_observations = 100.
         clip_actions = 100.
-        action_scale = 0.25
 
     class commands:
-
-        resampling_time = 10.
-        heading_command = True
-
         class ranges:
             lin_vel_x = [-1.0, 1.0]
             lin_vel_y = [-1.0, 1.0]
             ang_vel_yaw = [-1.57, 1.57]
             heading = [-3.14, 3.14]
 
+        resampe_time_s = 10.
+        heading_command = True
+
+    class noise:
+        add_noise = True
+        noise_level = 1.0
+
+        class noise_scales:
+            ang_vel = 0.2
+            projected_gravity = 0.05
+            joint_pos = 0.01
+            joint_vel = 1.5
+
+    class domain_rand:
+
+        class reset_robot_joints:
+            params = {"position_range": (0.5, 1.5),
+                      "velocity_range": (0.0, 0.0)}
+
+        class reset_robot_base:
+            params = {
+                "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
+                "velocity_range": {
+                    "x": (-0.5, 0.5),
+                    "y": (-0.5, 0.5),
+                    "z": (-0.5, 0.5),
+                    "roll": (-0.5, 0.5),
+                    "pitch": (-0.5, 0.5),
+                    "yaw": (-0.5, 0.5),
+                }
+            }
+
+        class randomize_robot_friction:
+            enable = True
+            params = {"static_friction_range": [0.6, 1.0],
+                      "dynamic_friction_range" : [0.4, 0.8],
+                      "restitution_range" : [0.0, 0.005],
+                      "num_buckets" : 64}
+
+        class add_rigid_body_mass:
+            enable = True
+            params = {"body_names": MISSING,
+                      "mass_distribution_params": (-5.0, 5.0),
+                      "operation": "add"}
+
+        class push_robot:
+            enable = True
+            push_interval_s = 15.
+            params = {"velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0)}}
+
     class sim:
         dt = 0.005
         decimation = 4
 
         class physx:
-            solver_type = 1
-            max_position_iteration_count = 8
-            max_velocity_iteration_count = 8
-            bounce_threshold_velocity = 0.2
-            gpu_max_rigid_contact_count = 2**24
-            gpu_found_lost_pairs_capacity = 2**22
-            gpu_found_lost_aggregate_pairs_capacity = 2**26
+            gpu_max_rigid_patch_count = 10 * 2**15
 
 
 class BaseAgentConfig(BaseConfig):

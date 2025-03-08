@@ -71,8 +71,7 @@ class Keyboard(DeviceBase):
         if event.type == carb.input.KeyboardEventType.KEY_PRESS:
             if event.input.name in self._INPUT_KEY_MAPPING:
                 if event.input.name == "R":
-                    env_ids = torch.arange(self.env.num_envs, device=self.env.device)
-                    self.env.reset(env_ids)
+                    self.env.episode_length_buf = torch.ones_like(self.env.episode_length_buf) * 1e6
 
         # since no error, we are fine :)
         return True

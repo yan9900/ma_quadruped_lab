@@ -3,3 +3,4 @@
 .vscode
 outputs
 logs
+run_bash.sh
