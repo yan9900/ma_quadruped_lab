@@ -6,6 +6,13 @@ class BaseEnvConfig(BaseConfig):
     device = "cuda:0"
 
     class scene:
+        class height_scanner:
+            enable_height_scan = False
+            prim_body_name = MISSING
+            resolution = 0.1
+            size = (1.6, 1.0)
+            debug_vis = False
+
         episode_length_s = 20.0
         num_envs = 4096
         env_spacing = 2.5
@@ -27,9 +34,11 @@ class BaseEnvConfig(BaseConfig):
             joint_pos = 1.0
             joint_vel = 1.0
             actions = 1.0
+            height_scan = 1.0
 
         clip_observations = 100.
         clip_actions = 100.
+        height_scan_offset = 0.5
 
     class commands:
         class ranges:
@@ -50,6 +59,7 @@ class BaseEnvConfig(BaseConfig):
             projected_gravity = 0.05
             joint_pos = 0.01
             joint_vel = 1.5
+            height_scan = 0.1
 
     class domain_rand:
 

@@ -6,6 +6,9 @@ from legged_lab.terrains import GRAVEL_TERRAINS_CFG
 
 class H1FlatEnvCfg(BaseEnvConfig):
     class scene(BaseEnvConfig.scene):
+        class height_scanner(BaseEnvConfig.scene.height_scanner):
+            prim_body_name = "torso_link"
+
         robot = H1_CFG
         terrain_type = "generator"
         terrain_generator = GRAVEL_TERRAINS_CFG

@@ -4,6 +4,7 @@ from isaaclab.utils import configclass
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg
 from isaaclab.terrains.terrain_importer_cfg import TerrainImporterCfg
+from isaaclab.sensors import RayCasterCfg, patterns
 from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR, ISAAC_NUCLEUS_DIR
 from typing import TYPE_CHECKING
 
@@ -41,7 +42,7 @@ class SceneCfg(InteractiveSceneCfg):
             debug_vis=False,
         )
 
-        self.robot: ArticulationCfg = config.robot.replace(prim_path="/World/envs/env_.*/Robot")
+        self.robot: ArticulationCfg = config.robot.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
         self.contact_sensor = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True)
 
@@ -56,3 +57,13 @@ class SceneCfg(InteractiveSceneCfg):
                 texture_file=f"{ISAAC_NUCLEUS_DIR}/Materials/Textures/Skies/PolyHaven/kloofendal_43d_clear_puresky_4k.hdr",
             ),
         )
+
+        if config.height_scanner.enable_height_scan:
+            self.height_scanner = RayCasterCfg(
+                prim_path="{ENV_REGEX_NS}/Robot/" + config.height_scanner.prim_body_name,
+                offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
+                attach_yaw_only=True,
+                pattern_cfg=patterns.GridPatternCfg(resolution=config.height_scanner.resolution, size=config.height_scanner.size),
+                debug_vis=config.height_scanner.debug_vis,
+                mesh_prim_paths=["/World/ground"],
+            )

@@ -9,7 +9,7 @@ from legged_lab.envs.env_utils.scene import SceneCfg
 import numpy as np
 import isaaclab.utils.math as math_utils
 from isaaclab.managers.scene_entity_cfg import SceneEntityCfg
-from isaaclab.sensors import ContactSensor
+from isaaclab.sensors import ContactSensor, RayCaster
 from isaaclab.envs.mdp.events import randomize_rigid_body_material, randomize_rigid_body_mass, reset_joints_by_scale, reset_root_state_uniform, push_by_setting_velocity
 
 
@@ -33,7 +33,9 @@ class BaseEnv(VecEnv):
         self.sim.reset()
 
         self.robot: Articulation = self.scene["robot"]
-        self.contact_sensor: ContactSensor = self.scene["contact_sensor"]
+        self.contact_sensor: ContactSensor = self.scene.sensors["contact_sensor"]
+        if self.cfg.scene.height_scanner.enable_height_scan:
+            self.height_scanner: RayCaster = self.scene.sensors["height_scanner"]
 
         self._init_buffers()
 
@@ -70,11 +72,12 @@ class BaseEnv(VecEnv):
 
         self.obs_scales = self.cfg.normalization.obs_scales
         self.add_noise = self.cfg.noise.add_noise
-        self.noise_scale_vec = self.get_noise_scale_vec()
+
         self.rew_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.float)
         self.reset_buf = torch.ones(self.num_envs, device=self.device, dtype=torch.long)
         self.episode_length_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.long)
         self.time_out_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
+        self.noise_scale_vec = self.get_noise_scale_vec()
 
     def compute_observations(self):
         robot = self.robot
@@ -88,11 +91,15 @@ class BaseEnv(VecEnv):
         actor_obs = torch.cat([
             ang_vel * self.obs_scales.ang_vel,
             projected_gravity * self.obs_scales.projected_gravity,
-            commands * self.obs_scales.commands,
+            commands[:, :3] * self.obs_scales.commands,
             joint_pos * self.obs_scales.joint_pos,
             joint_vel * self.obs_scales.joint_vel,
             action * self.obs_scales.actions
         ], dim=-1)
+
+        if self.cfg.scene.height_scanner.enable_height_scan:
+            height_scan = self.height_scanner.data.pos_w[:, 2].unsqueeze(1) - self.height_scanner.data.ray_hits_w[..., 2] - self.cfg.normalization.height_scan_offset
+            actor_obs = torch.cat([actor_obs, height_scan * self.obs_scales.height_scan], dim=-1)
         critic_obs = actor_obs.clone()
         return actor_obs, critic_obs
 
@@ -100,6 +107,8 @@ class BaseEnv(VecEnv):
         return (2 * torch.rand_like(obs) - 1) * self.noise_scale_vec
 
     def get_observations(self):
+        self.sim.step(render=False)
+        self.scene.update(dt=self.physics_dt)
         actor_obs, critic_obs = self.compute_observations()
         extras = {}
         extras["observations"] = {"critic": critic_obs}
@@ -139,7 +148,8 @@ class BaseEnv(VecEnv):
             self.sim.step(render=False)
             self.scene.update(dt=self.physics_dt)
 
-        self.sim.render()
+        if not self.hedless:
+            self.sim.render()
 
         self.post_physics_step()
 
@@ -227,6 +237,8 @@ class BaseEnv(VecEnv):
         noise_vec[9:9 + self.num_actions] = noise_scales.joint_pos * noise_level * self.obs_scales.joint_pos
         noise_vec[9 + self.num_actions:9 + self.num_actions * 2] = noise_scales.joint_vel * noise_level * self.obs_scales.joint_vel
         noise_vec[9 + self.num_actions * 2:9 + self.num_actions * 3] = 0.
+        if self.cfg.scene.height_scanner.enable_height_scan:
+            noise_vec[9 + self.num_actions * 3:] = noise_scales.height_scan * noise_level * self.obs_scales.height_scan
         return noise_vec
 
     def compute_reward(self):
