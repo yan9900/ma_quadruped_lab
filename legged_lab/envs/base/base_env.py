@@ -12,7 +12,7 @@ from isaaclab.sensors import ContactSensor, RayCaster
 from isaaclab.envs.mdp.commands import UniformVelocityCommand, UniformVelocityCommandCfg
 from isaaclab.envs.mdp.events import randomize_rigid_body_material, randomize_rigid_body_mass, reset_joints_by_scale, reset_root_state_uniform, push_by_setting_velocity
 from isaaclab.managers import RewardManager
-from isaaclab.utils.buffers import CircularBuffer
+from isaaclab.utils.buffers import CircularBuffer, DelayBuffer
 
 
 class BaseEnv(VecEnv):
@@ -73,11 +73,13 @@ class BaseEnv(VecEnv):
         self.clip_actions = self.cfg.normalization.clip_actions
         self.clip_obs = self.cfg.normalization.clip_observations
 
-        if self.cfg.domain_rand.action_delay.enable:
-            assert (self.cfg.domain_rand.action_delay.delay_steps <= (self.cfg.robot.action_history_length - 1))
         self.action_scale = self.cfg.robot.action_scale
-        self.action_buffer = CircularBuffer(max_len=self.cfg.robot.action_history_length, batch_size=self.num_envs, device=self.device)
-        self.action_buffer.append(torch.zeros(self.num_envs, self.num_actions, dtype=torch.float, device=self.device, requires_grad=False))
+        self.action_buffer = DelayBuffer(self.cfg.domain_rand.action_delay.params["max_delay"], self.num_envs, device=self.device)
+        self.action_buffer.compute((torch.zeros(self.num_envs, self.num_actions, dtype=torch.float, device=self.device, requires_grad=False)))
+        # set delays
+        if self.cfg.domain_rand.action_delay.enable:
+            time_lags = torch.randint(low=self.cfg.domain_rand.action_delay.params["min_delay"], high=self.cfg.domain_rand.action_delay.params["max_delay"] + 1, size=(self.num_envs,), dtype=torch.int, device=self.device,)
+            self.action_buffer.set_time_lag(time_lags, torch.arange(self.num_envs, device=self.device))
 
         self.robot_cfg = SceneEntityCfg(name="robot")
         self.robot_cfg.resolve(self.scene)
@@ -102,7 +104,7 @@ class BaseEnv(VecEnv):
         command = self.command_generator.command
         joint_pos = robot.data.joint_pos - robot.data.default_joint_pos
         joint_vel = robot.data.joint_vel - robot.data.default_joint_vel
-        action = self.action_buffer.buffer[:, -1, :]
+        action = self.action_buffer._circular_buffer.buffer[:, -1, :]
         current_actor_obs = torch.cat([
             ang_vel * self.obs_scales.ang_vel,
             projected_gravity * self.obs_scales.projected_gravity,
@@ -180,13 +182,10 @@ class BaseEnv(VecEnv):
         self.episode_length_buf[env_ids] = 0
 
     def step(self, actions: torch.Tensor):
-        self.action_buffer.append(actions)
-        if self.cfg.domain_rand.action_delay.enable:
-            deplyed_actions = self.action_buffer.buffer[:, -self.cfg.domain_rand.action_delay.delay_steps - 1, :]
-        else:
-            deplyed_actions = self.action_buffer.buffer[:, -1, :]
 
-        cliped_actions = torch.clip(deplyed_actions, -self.clip_actions, self.clip_actions).to(self.device)
+        delayed_actions = self.action_buffer.compute(actions)
+
+        cliped_actions = torch.clip(delayed_actions, -self.clip_actions, self.clip_actions).to(self.device)
         processed_actions = cliped_actions * self.action_scale + self.robot.data.default_joint_pos
 
         for _ in range(self.cfg.sim.decimation):

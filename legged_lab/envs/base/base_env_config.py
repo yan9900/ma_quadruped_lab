@@ -33,7 +33,6 @@ class BaseSceneCfg:
 class RobotCfg:
     actor_obs_history_length = 10
     critic_obs_history_length = 10
-    action_history_length = 10
     action_scale: float = 0.25
     terminate_contacts_body_names: list = []
     feet_names: list = []
@@ -149,7 +148,7 @@ class PushRobotCfg:
 @configclass
 class ActionDelayCfg:
     enable: bool = False
-    delay_steps: int = 0
+    params: dict = {"max_delay": 5, "min_delay": 0}
 
 
 @configclass
