@@ -55,7 +55,8 @@ class H1RewardCfg(RewardCfg):
     feet_air_time = RewTerm(func=mdp.feet_air_time_positive_biped, weight=0.5, params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=".*ankle.*"), "threshold": 0.4})
     feet_slide = RewTerm(func=mdp.feet_slide, weight=-0.25, params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=".*ankle.*"), "asset_cfg": SceneEntityCfg("robot", body_names=".*ankle.*")})
     feet_force = RewTerm(func=mdp.body_force, weight=-3e-3, params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=".*ankle.*"), "threshold": 500, "max_reward": 400})
-    feet_to_near_humanoid = RewTerm(func=mdp.feet_to_near_humanoid, weight=-2.0, params={"asset_cfg": SceneEntityCfg("robot", body_names=[".*ankle.*"]), "threshold": 0.3})
+    feet_too_near = RewTerm(func=mdp.feet_too_near_humanoid, weight=-2.0, params={"asset_cfg": SceneEntityCfg("robot", body_names=[".*ankle.*"]), "threshold": 0.3})
+    feet_stumble = RewTerm(func=mdp.feet_stumble, weight=-2.0, params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=[".*ankle.*"])})
     dof_pos_limits = RewTerm(func=mdp.joint_pos_limits, weight=-2.0)
     joint_deviation_hip = RewTerm(func=mdp.joint_deviation_l1, weight=-0.1, params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_yaw.*", ".*_hip_roll.*"])})
     joint_deviation_arms = RewTerm(func=mdp.joint_deviation_l1, weight=-0.2, params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*torso.*", ".*_shoulder.*", ".*_elbow.*"])})
@@ -87,7 +88,11 @@ class H1RoughEnvCfg(BaseEnvCfg):
     )
     robot: H1RobotCfg = H1RobotCfg()
     domain_rand: H1DomainRandCfg = H1DomainRandCfg()
-    reward: H1RewardCfg = H1RewardCfg()
+    reward: H1RewardCfg = H1RewardCfg(
+        track_lin_vel_xy_exp=RewTerm(func=mdp.track_lin_vel_xy_yaw_frame_exp, weight=1.5, params={"std": 0.5}),
+        track_ang_vel_z_exp=RewTerm(func=mdp.track_ang_vel_z_world_exp, weight=1.5, params={"std": 0.5}),
+        lin_vel_z_l2=RewTerm(func=mdp.lin_vel_z_l2, weight=-0.25)
+    )
 
 
 @configclass

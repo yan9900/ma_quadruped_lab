@@ -76,7 +76,7 @@ class BaseEnv(VecEnv):
         self.action_scale = self.cfg.robot.action_scale
         self.action_buffer = DelayBuffer(self.cfg.domain_rand.action_delay.params["max_delay"], self.num_envs, device=self.device)
         self.action_buffer.compute((torch.zeros(self.num_envs, self.num_actions, dtype=torch.float, device=self.device, requires_grad=False)))
-        # set delays
+
         if self.cfg.domain_rand.action_delay.enable:
             time_lags = torch.randint(low=self.cfg.domain_rand.action_delay.params["min_delay"], high=self.cfg.domain_rand.action_delay.params["max_delay"] + 1, size=(self.num_envs,), dtype=torch.int, device=self.device,)
             self.action_buffer.set_time_lag(time_lags, torch.arange(self.num_envs, device=self.device))
