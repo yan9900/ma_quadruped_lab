@@ -17,7 +17,6 @@ from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 from legged_lab.assets import ISAAC_ASSET_DIR
 
-
 H1_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
         usd_path=f"{ISAAC_ASSET_DIR}/unitree/h1/h1.usd",
