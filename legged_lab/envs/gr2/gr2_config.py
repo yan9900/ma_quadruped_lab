@@ -72,7 +72,7 @@ class GR2FlatAgentCfg(BaseAgentCfg):
 class GR2RoughEnvCfg(GR2FlatEnvCfg):
     scene = BaseSceneCfg(
         height_scanner=HeightScannerCfg(
-            enable_height_scan=False,
+            enable_height_scan=True,
             prim_body_name="torso_link"
         ),
         robot=GR2_CFG,

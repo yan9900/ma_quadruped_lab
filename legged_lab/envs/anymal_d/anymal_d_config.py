@@ -63,7 +63,7 @@ class AnymalDRewardCfg(RewardCfg):
 class AnymalDFlatEnvCfg(BaseEnvCfg):
     scene = BaseSceneCfg(
         height_scanner=HeightScannerCfg(
-            enable_height_scan=False,
+            enable_height_scan=True,
             prim_body_name="base"
         ),
         robot=ANYMAL_D_CFG,

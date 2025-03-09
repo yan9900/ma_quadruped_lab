@@ -72,7 +72,7 @@ class H1FlatAgentCfg(BaseAgentCfg):
 class H1RoughEnvCfg(H1FlatEnvCfg):
     scene = BaseSceneCfg(
         height_scanner=HeightScannerCfg(
-            enable_height_scan=False,
+            enable_height_scan=True,
             prim_body_name="torso_link"
         ),
         robot=H1_CFG,
