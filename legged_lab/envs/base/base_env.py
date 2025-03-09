@@ -149,6 +149,12 @@ class BaseEnv(VecEnv):
     def reset(self, env_ids):
         if len(env_ids) == 0:
             return
+
+        self.extras["log"] = dict()
+        if self.cfg.scene.terrain_generator.curriculum:
+            terrain_levels = self.update_terrain_levels(env_ids)
+            self.extras["log"].update(terrain_levels)
+
         self.scene.reset(env_ids)
         reset_joints_by_scale(
             env=self,
@@ -165,16 +171,11 @@ class BaseEnv(VecEnv):
             asset_cfg=self.robot_cfg,
         )
 
-        self.command_generator.reset(env_ids)
-
-        self.extras["log"] = dict()
-        if self.cfg.scene.terrain_generator.curriculum:
-            terrain_levels = self.update_terrain_levels(env_ids)
-            self.extras["log"].update(terrain_levels)
         reward_extras = self.reward_maneger.reset(env_ids)
         self.extras['log'].update(reward_extras)
         self.extras["time_outs"] = self.time_out_buf
 
+        self.command_generator.reset(env_ids)
         self.actor_obs_buffer.reset(env_ids)
         self.critic_obs_buffer.reset(env_ids)
         self.action_buffer.reset(env_ids)
@@ -197,9 +198,9 @@ class BaseEnv(VecEnv):
             self.sim.render()
 
         self.episode_length_buf += 1
-        self.post_physics_step_callback()
+        self.post_step_callback()
 
-        self.check_termination()
+        self.check_reset()
         reward_buf = self.reward_maneger.compute(self.step_dt)
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset(env_ids)
@@ -209,7 +210,7 @@ class BaseEnv(VecEnv):
 
         return actor_obs, reward_buf, self.reset_buf, self.extras
 
-    def post_physics_step_callback(self):
+    def post_step_callback(self):
         self.command_generator.compute(self.step_dt)
         if self.cfg.domain_rand.push_robot.enable:
             env_ids = (self.episode_length_buf % int(self.cfg.domain_rand.push_robot.push_interval_s / self.step_dt) == 0).nonzero(as_tuple=False).flatten()
@@ -221,7 +222,7 @@ class BaseEnv(VecEnv):
                     asset_cfg=self.robot_cfg,
                 )
 
-    def check_termination(self):
+    def check_reset(self):
         net_contact_forces = self.contact_sensor.data.net_forces_w_history
 
         self.reset_buf = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.termination_contact_cfg.body_ids], dim=-1,), dim=1,)[0] > 1.0, dim=1)
