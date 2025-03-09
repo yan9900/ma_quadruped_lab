@@ -62,8 +62,8 @@ class NormalizationCfg:
 
 @configclass
 class CommandRangesCfg:
-    lin_vel_x: tuple = (-1.0, 1.0)
-    lin_vel_y: tuple = (-0.6, 0.6)
+    lin_vel_x: tuple = (-0.6, 1.0)
+    lin_vel_y: tuple = (-0.5, 0.5)
     ang_vel_z: tuple = (-1.0, 1.0)
     heading: tuple = (-math.pi, math.pi)
 
@@ -189,12 +189,24 @@ class BaseEnvCfg:
 
 
 @configclass
-class PolicyCfg:
+class MLPPolicyCfg:
     class_name: str = "ActorCritic"
     init_noise_std: float = 1.0
     actor_hidden_dims: list = [512, 256, 128]
     critic_hidden_dims: list = [512, 256, 128]
     activation: str = "elu"
+
+
+@configclass
+class RNNPolicyCfg:
+    class_name = "ActorCriticRecurrent"
+    init_noise_std = 1.0
+    actor_hidden_dims = [256, 256, 128]
+    critic_hidden_dims = [256, 256, 128]
+    activation = "elu"
+    rnn_hidden_size = 256
+    rnn_num_layers = 1
+    rnn_type = "lstm"
 
 
 @configclass
@@ -228,5 +240,5 @@ class BaseAgentCfg:
     wandb_project: str = MISSING
     load_run: str = ".*"
     load_checkpoint: str = "model_.*.pt"
-    policy: PolicyCfg = PolicyCfg()
+    policy: MLPPolicyCfg | RNNPolicyCfg = MLPPolicyCfg()
     algorithm: AlgorithmCfg = AlgorithmCfg()

@@ -1,6 +1,6 @@
 from legged_lab.envs.base.base_env_config import (  # noqa:F401
     BaseEnvCfg, BaseAgentCfg, BaseSceneCfg, RobotCfg, DomainRandCfg,
-    RewardCfg, HeightScannerCfg, AddRigidBodyMassCfg, PhysxCfg, SimCfg
+    RewardCfg, HeightScannerCfg, AddRigidBodyMassCfg, PhysxCfg, SimCfg, MLPPolicyCfg, RNNPolicyCfg
 )
 from legged_lab.assets.anybotics import ANYMAL_D_CFG
 from legged_lab.terrains import GRAVEL_TERRAINS_CFG, ROUGH_TERRAINS_CFG
@@ -61,10 +61,30 @@ class AnymalDRewardCfg(RewardCfg):
 
 @configclass
 class AnymalDFlatEnvCfg(BaseEnvCfg):
-    scene: AnymalDSceneCfg = AnymalDSceneCfg()
-    robot: AnymalDRobotCfg = AnymalDRobotCfg()
-    domain_rand: AnymalDDomainRandCfg = AnymalDDomainRandCfg()
-    reward: AnymalDRewardCfg = AnymalDRewardCfg()
+    scene = BaseSceneCfg(
+        height_scanner=HeightScannerCfg(
+            enable_height_scan=False,
+            prim_body_name="base"
+        ),
+        robot=ANYMAL_D_CFG,
+        terrain_type="generator",
+        terrain_generator=GRAVEL_TERRAINS_CFG
+    )
+    robot = RobotCfg(
+        terminate_contacts_body_names=[".*base.*"],
+        feet_names=[".*FOOT.*"]
+    )
+    domain_rand = DomainRandCfg(
+        add_rigid_body_mass=AddRigidBodyMassCfg(
+            enable=True,
+            params={
+                "body_names": [".*base.*"],
+                "mass_distribution_params": (-5.0, 5.0),
+                "operation": "add"
+            }
+        )
+    )
+    reward = AnymalDRewardCfg()
 
 
 @configclass
@@ -74,20 +94,31 @@ class AnymalDFlatAgentCfg(BaseAgentCfg):
 
 
 @configclass
-class AnymalDRoughEnvCfg(BaseEnvCfg):
-    scene: AnymalDSceneCfg = AnymalDSceneCfg(
+class AnymalDRoughEnvCfg(AnymalDFlatEnvCfg):
+    scene = BaseSceneCfg(
         height_scanner=HeightScannerCfg(
-            enable_height_scan=True,
+            enable_height_scan=False,
             prim_body_name="base"
         ),
+        robot=ANYMAL_D_CFG,
+        terrain_type="generator",
         terrain_generator=ROUGH_TERRAINS_CFG
     )
-    robot: AnymalDRobotCfg = AnymalDRobotCfg()
-    domain_rand: AnymalDDomainRandCfg = AnymalDDomainRandCfg()
-    reward: AnymalDRewardCfg = AnymalDRewardCfg()
+    robot = RobotCfg(
+        actor_obs_history_length=1,
+        critic_obs_history_length=1,
+        terminate_contacts_body_names=[".*base.*"],
+        feet_names=[".*FOOT.*"]
+    )
+    reward = AnymalDRewardCfg(
+        track_lin_vel_xy_exp=RewTerm(func=mdp.track_lin_vel_xy_yaw_frame_exp, weight=1.5, params={"std": 0.5}),
+        track_ang_vel_z_exp=RewTerm(func=mdp.track_ang_vel_z_world_exp, weight=1.5, params={"std": 0.5}),
+        lin_vel_z_l2=RewTerm(func=mdp.lin_vel_z_l2, weight=-0.25)
+    )
 
 
 @configclass
 class AnymalDRoughAgentCfg(BaseAgentCfg):
-    experiment_name: str = "anymal_c_rough"
-    wandb_project: str = "anymal_c_rough"
+    experiment_name: str = "anymal_d_rough"
+    wandb_project: str = "anymal_d_rough"
+    policy = RNNPolicyCfg()

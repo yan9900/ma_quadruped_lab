@@ -151,9 +151,10 @@ class BaseEnv(VecEnv):
             return
 
         self.extras["log"] = dict()
-        if self.cfg.scene.terrain_generator.curriculum:
-            terrain_levels = self.update_terrain_levels(env_ids)
-            self.extras["log"].update(terrain_levels)
+        if self.cfg.scene.terrain_generator is not None:
+            if self.cfg.scene.terrain_generator.curriculum:
+                terrain_levels = self.update_terrain_levels(env_ids)
+                self.extras["log"].update(terrain_levels)
 
         self.scene.reset(env_ids)
         reset_joints_by_scale(

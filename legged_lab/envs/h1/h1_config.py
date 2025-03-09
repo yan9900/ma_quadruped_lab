@@ -1,6 +1,6 @@
 from legged_lab.envs.base.base_env_config import (  # noqa:F401
     BaseEnvCfg, BaseAgentCfg, BaseSceneCfg, RobotCfg, DomainRandCfg,
-    RewardCfg, HeightScannerCfg, AddRigidBodyMassCfg, PhysxCfg, SimCfg
+    RewardCfg, HeightScannerCfg, AddRigidBodyMassCfg, PhysxCfg, SimCfg, MLPPolicyCfg, RNNPolicyCfg
 )
 from legged_lab.assets.unitree import H1_CFG
 from legged_lab.terrains import GRAVEL_TERRAINS_CFG, ROUGH_TERRAINS_CFG
@@ -8,35 +8,6 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 import legged_lab.mdp as mdp
 from isaaclab.managers.scene_entity_cfg import SceneEntityCfg
 from isaaclab.utils import configclass
-
-
-@configclass
-class H1SceneCfg(BaseSceneCfg):
-    height_scanner: HeightScannerCfg = HeightScannerCfg(
-        enable_height_scan=False,
-        prim_body_name="torso_link"
-    )
-    robot: str = H1_CFG
-    terrain_type: str = "generator"
-    terrain_generator: str = GRAVEL_TERRAINS_CFG
-
-
-@configclass
-class H1RobotCfg(RobotCfg):
-    terminate_contacts_body_names: list = [".*torso.*"]
-    feet_names: list = [".*ankle.*"]
-
-
-@configclass
-class H1DomainRandCfg(DomainRandCfg):
-    add_rigid_body_mass: AddRigidBodyMassCfg = AddRigidBodyMassCfg(
-        enable=True,
-        params={
-            "body_names": [".*torso.*"],
-            "mass_distribution_params": (-5.0, 5.0),
-            "operation": "add"
-        }
-    )
 
 
 @configclass
@@ -65,10 +36,30 @@ class H1RewardCfg(RewardCfg):
 
 @configclass
 class H1FlatEnvCfg(BaseEnvCfg):
-    scene: H1SceneCfg = H1SceneCfg()
-    robot: H1RobotCfg = H1RobotCfg()
-    domain_rand: H1DomainRandCfg = H1DomainRandCfg()
-    reward: H1RewardCfg = H1RewardCfg()
+    scene = BaseSceneCfg(
+        height_scanner=HeightScannerCfg(
+            enable_height_scan=False,
+            prim_body_name="torso_link"
+        ),
+        robot=H1_CFG,
+        terrain_type="generator",
+        terrain_generator=GRAVEL_TERRAINS_CFG
+    )
+    robot = RobotCfg(
+        terminate_contacts_body_names=[".*torso.*"],
+        feet_names=[".*ankle.*"]
+    )
+    domain_rand = DomainRandCfg(
+        add_rigid_body_mass=AddRigidBodyMassCfg(
+            enable=True,
+            params={
+                "body_names": [".*torso.*"],
+                "mass_distribution_params": (-5.0, 5.0),
+                "operation": "add"
+            }
+        )
+    )
+    reward = H1RewardCfg()
 
 
 @configclass
@@ -78,17 +69,23 @@ class H1FlatAgentCfg(BaseAgentCfg):
 
 
 @configclass
-class H1RoughEnvCfg(BaseEnvCfg):
-    scene: H1SceneCfg = H1SceneCfg(
+class H1RoughEnvCfg(H1FlatEnvCfg):
+    scene = BaseSceneCfg(
         height_scanner=HeightScannerCfg(
-            enable_height_scan=True,
+            enable_height_scan=False,
             prim_body_name="torso_link"
         ),
+        robot=H1_CFG,
+        terrain_type="generator",
         terrain_generator=ROUGH_TERRAINS_CFG
     )
-    robot: H1RobotCfg = H1RobotCfg()
-    domain_rand: H1DomainRandCfg = H1DomainRandCfg()
-    reward: H1RewardCfg = H1RewardCfg(
+    robot = RobotCfg(
+        actor_obs_history_length=1,
+        critic_obs_history_length=1,
+        terminate_contacts_body_names=[".*torso.*"],
+        feet_names=[".*ankle.*"]
+    )
+    reward = H1RewardCfg(
         track_lin_vel_xy_exp=RewTerm(func=mdp.track_lin_vel_xy_yaw_frame_exp, weight=1.5, params={"std": 0.5}),
         track_ang_vel_z_exp=RewTerm(func=mdp.track_ang_vel_z_world_exp, weight=1.5, params={"std": 0.5}),
         lin_vel_z_l2=RewTerm(func=mdp.lin_vel_z_l2, weight=-0.25)
@@ -99,3 +96,4 @@ class H1RoughEnvCfg(BaseEnvCfg):
 class H1RoughAgentCfg(BaseAgentCfg):
     experiment_name: str = "h1_rough"
     wandb_project: str = "h1_rough"
+    policy = RNNPolicyCfg()

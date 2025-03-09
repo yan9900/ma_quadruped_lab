@@ -49,6 +49,9 @@ def train():
     env_cfg.commands.ranges.lin_vel_y = (0.0, 0.0)
     env_cfg.commands.ranges.heading = (0.0, 0.0)
 
+    # env_cfg.scene.terrain_generator = None
+    # env_cfg.scene.terrain_type = "plane"
+
     if env_cfg.scene.terrain_generator is not None:
         env_cfg.scene.terrain_generator.num_rows = 5
         env_cfg.scene.terrain_generator.num_cols = 5
