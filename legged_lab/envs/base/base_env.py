@@ -76,7 +76,6 @@ class BaseEnv(VecEnv):
         self.action_scale = self.cfg.robot.action_scale
         self.action_buffer = DelayBuffer(self.cfg.domain_rand.action_delay.params["max_delay"], self.num_envs, device=self.device)
         self.action_buffer.compute((torch.zeros(self.num_envs, self.num_actions, dtype=torch.float, device=self.device, requires_grad=False)))
-
         if self.cfg.domain_rand.action_delay.enable:
             time_lags = torch.randint(low=self.cfg.domain_rand.action_delay.params["min_delay"], high=self.cfg.domain_rand.action_delay.params["max_delay"] + 1, size=(self.num_envs,), dtype=torch.int, device=self.device,)
             self.action_buffer.set_time_lag(time_lags, torch.arange(self.num_envs, device=self.device))
@@ -226,7 +225,7 @@ class BaseEnv(VecEnv):
         net_contact_forces = self.contact_sensor.data.net_forces_w_history
 
         self.reset_buf = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.termination_contact_cfg.body_ids], dim=-1,), dim=1,)[0] > 1.0, dim=1)
-        self.time_out_buf = self.episode_length_buf > self.max_episode_length
+        self.time_out_buf = self.episode_length_buf >= self.max_episode_length
         self.reset_buf |= self.time_out_buf
 
     def apply_domain_random_at_start(self, env_ids):
