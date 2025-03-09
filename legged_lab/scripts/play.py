@@ -53,6 +53,7 @@ def train():
         env_cfg.scene.terrain_generator.num_rows = 5
         env_cfg.scene.terrain_generator.num_cols = 5
         env_cfg.scene.terrain_generator.curriculum = False
+        env_cfg.scene.terrain_generator.difficulty_range = (0.6, 0.6)
 
     if args_cli.num_envs is not None:
         env_cfg.scene.num_envs = args_cli.num_envs

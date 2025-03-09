@@ -201,14 +201,14 @@ class BaseEnv(VecEnv):
         self.post_physics_step_callback()
 
         self.check_termination()
-        self.reward_buf = self.reward_maneger.compute(self.step_dt)
+        reward_buf = self.reward_maneger.compute(self.step_dt)
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset(env_ids)
 
         actor_obs, critic_obs = self.compute_observations()
         self.extras["observations"] = {"critic": critic_obs}
 
-        return actor_obs, self.reward_buf, self.reset_buf, self.extras
+        return actor_obs, reward_buf, self.reset_buf, self.extras
 
     def post_physics_step_callback(self):
         self.command_generator.compute(self.step_dt)

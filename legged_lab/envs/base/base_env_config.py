@@ -2,7 +2,7 @@ from dataclasses import MISSING
 import math
 from isaaclab.utils import configclass
 from isaaclab.assets.articulation import ArticulationCfg
-from isaaclab.terrains.terrain_importer_cfg import TerrainImporterCfg
+from isaaclab.terrains.terrain_generator_cfg import TerrainGeneratorCfg
 
 
 @configclass
@@ -26,7 +26,7 @@ class BaseSceneCfg:
     env_spacing: float = 2.5
     robot: ArticulationCfg = MISSING
     terrain_type: str = MISSING
-    terrain_generator: TerrainImporterCfg = MISSING
+    terrain_generator: TerrainGeneratorCfg = MISSING
     max_init_terrain_level: int = 5
     height_scanner: HeightScannerCfg = HeightScannerCfg()
 
