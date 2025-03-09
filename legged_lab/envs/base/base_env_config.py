@@ -33,6 +33,7 @@ class BaseSceneCfg:
 class RobotCfg:
     actor_obs_history_length = 10
     critic_obs_history_length = 10
+    action_history_length = 10
     action_scale: float = 0.25
     terminate_contacts_body_names: list = []
     feet_names: list = []
@@ -146,12 +147,19 @@ class PushRobotCfg:
 
 
 @configclass
+class ActionDelayCfg:
+    enable: bool = False
+    delay_steps: int = 0
+
+
+@configclass
 class DomainRandCfg:
     reset_robot_joints: ResetRobotJointsCfg = ResetRobotJointsCfg()
     reset_robot_base: ResetRobotBaseCfg = ResetRobotBaseCfg()
     randomize_robot_friction: RandomizeRobotFrictionCfg = RandomizeRobotFrictionCfg()
     add_rigid_body_mass: AddRigidBodyMassCfg = AddRigidBodyMassCfg()
     push_robot: PushRobotCfg = PushRobotCfg()
+    action_delay: ActionDelayCfg = ActionDelayCfg()
 
 
 @configclass

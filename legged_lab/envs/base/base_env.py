@@ -73,9 +73,11 @@ class BaseEnv(VecEnv):
         self.clip_actions = self.cfg.normalization.clip_actions
         self.clip_obs = self.cfg.normalization.clip_observations
 
+        if self.cfg.domain_rand.action_delay.enable:
+            assert (self.cfg.domain_rand.action_delay.delay_steps <= (self.cfg.robot.action_history_length - 1))
         self.action_scale = self.cfg.robot.action_scale
-        self.actions = torch.zeros(self.num_envs, self.num_actions, dtype=torch.float, device=self.device, requires_grad=False)
-        self.last_actions = torch.zeros(self.num_envs, self.num_actions, dtype=torch.float, device=self.device, requires_grad=False)
+        self.action_buffer = CircularBuffer(max_len=self.cfg.robot.action_history_length, batch_size=self.num_envs, device=self.device)
+        self.action_buffer.append(torch.zeros(self.num_envs, self.num_actions, dtype=torch.float, device=self.device, requires_grad=False))
 
         self.robot_cfg = SceneEntityCfg(name="robot")
         self.robot_cfg.resolve(self.scene)
@@ -100,7 +102,7 @@ class BaseEnv(VecEnv):
         command = self.command_generator.command
         joint_pos = robot.data.joint_pos - robot.data.default_joint_pos
         joint_vel = robot.data.joint_vel - robot.data.default_joint_vel
-        action = self.actions
+        action = self.action_buffer.buffer[:, -1, :]
         current_actor_obs = torch.cat([
             ang_vel * self.obs_scales.ang_vel,
             projected_gravity * self.obs_scales.projected_gravity,
@@ -174,15 +176,17 @@ class BaseEnv(VecEnv):
 
         self.actor_obs_buffer.reset(env_ids)
         self.critic_obs_buffer.reset(env_ids)
-        self.actions[env_ids] = 0.
-        self.last_actions[env_ids] = 0.
+        self.action_buffer.reset(env_ids)
         self.episode_length_buf[env_ids] = 0
 
     def step(self, actions: torch.Tensor):
-        self.last_actions = self.actions.clone()
-        self.actions = actions.clone()
+        self.action_buffer.append(actions)
+        if self.cfg.domain_rand.action_delay.enable:
+            deplyed_actions = self.action_buffer.buffer[:, -self.cfg.domain_rand.action_delay.delay_steps - 1, :]
+        else:
+            deplyed_actions = self.action_buffer.buffer[:, -1, :]
 
-        cliped_actions = torch.clip(actions, -self.clip_actions, self.clip_actions).to(self.device)
+        cliped_actions = torch.clip(deplyed_actions, -self.clip_actions, self.clip_actions).to(self.device)
         processed_actions = cliped_actions * self.action_scale + self.robot.data.default_joint_pos
 
         for _ in range(self.cfg.sim.decimation):

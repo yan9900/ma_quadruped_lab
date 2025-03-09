@@ -47,7 +47,7 @@ def joint_acc_l2(env: BaseEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot
 
 
 def action_rate_l2(env: BaseEnv) -> torch.Tensor:
-    return torch.sum(torch.square(env.last_actions - env.actions), dim=1)
+    return torch.sum(torch.square(env.action_buffer.buffer[:, -2, :] - env.action_buffer.buffer[:, -1, :]), dim=1)
 
 
 def undesired_contacts(env: BaseEnv, threshold: float, sensor_cfg: SceneEntityCfg) -> torch.Tensor:
