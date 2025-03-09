@@ -28,6 +28,7 @@ from isaaclab_rl.rsl_rl import export_policy_as_jit, export_policy_as_onnx
 
 import isaacsim.core.utils.torch as torch_utils
 from legged_lab.envs import *  # noqa:F401, F403
+from legged_lab.utils.cli_args import update_rsl_rl_cfg
 from isaaclab_tasks.utils import get_checkpoint_path
 from legged_lab.utils.keyboard import Keyboard
 
@@ -59,6 +60,7 @@ def train():
     env_class = task_registry.get_task_class(env_class_name)
     env = env_class(env_cfg, args_cli.headless)
 
+    agent_cfg = update_rsl_rl_cfg(agent_cfg, args_cli)
     log_root_path = os.path.join("logs", agent_cfg.experiment_name)
     log_root_path = os.path.abspath(log_root_path)
     print(f"[INFO] Loading experiment from directory: {log_root_path}")

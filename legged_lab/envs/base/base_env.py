@@ -13,7 +13,6 @@ from isaaclab.envs.mdp.commands import UniformVelocityCommand, UniformVelocityCo
 from isaaclab.envs.mdp.events import randomize_rigid_body_material, randomize_rigid_body_mass, reset_joints_by_scale, reset_root_state_uniform, push_by_setting_velocity
 from isaaclab.managers import RewardManager
 from isaaclab.utils.buffers import CircularBuffer
-from isaaclab.terrains.terrain_importer import TerrainImporter
 
 
 class BaseEnv(VecEnv):
@@ -59,13 +58,13 @@ class BaseEnv(VecEnv):
         self.command_generator = UniformVelocityCommand(cfg=command_cfg, env=self)
         self.reward_maneger = RewardManager(self.cfg.reward, self)
 
-        self._init_buffers()
+        self.init_buffers()
 
         env_ids = torch.arange(self.num_envs, device=self.device)
         self.apply_domain_random_at_start(env_ids)
         self.reset(env_ids)
 
-    def _init_buffers(self):
+    def init_buffers(self):
         self.extras = {}
 
         self.max_episode_length_s = self.cfg.scene.max_episode_length_s
@@ -142,13 +141,6 @@ class BaseEnv(VecEnv):
             actor_obs = torch.cat([actor_obs, height_scan], dim=-1)
             critic_obs = torch.cat([critic_obs, height_scan], dim=-1)
         return actor_obs, critic_obs
-
-    def get_observations(self):
-        self.sim.step(render=False)
-        self.scene.update(dt=self.physics_dt)
-        actor_obs, critic_obs = self.compute_observations()
-        self.extras["observations"] = {"critic": critic_obs}
-        return actor_obs, self.extras
 
     def reset(self, env_ids):
         if len(env_ids) == 0:
@@ -290,3 +282,10 @@ class BaseEnv(VecEnv):
         extras = {}
         extras["Curriculum/terrain_levels"] = torch.mean(self.scene.terrain.terrain_levels.float())
         return extras
+
+    def get_observations(self):
+        self.sim.step(render=False)
+        self.scene.update(dt=self.physics_dt)
+        actor_obs, critic_obs = self.compute_observations()
+        self.extras["observations"] = {"critic": critic_obs}
+        return actor_obs, self.extras
