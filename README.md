@@ -32,10 +32,10 @@ It has all the necessary conditions for sim-to-real and has been tested on real 
 
 ```bash
 # Option 1: HTTPS
-git clone https://github.com/Hellod035/Legged_Lab
+git clone https://github.com/Hellod035/legged_lab
 
 # Option 2: SSH
-git clone git@github.com:Hellod035/Legged_Lab.git
+git clone git@github.com:Hellod035/legged_lab.git
 ```
 
 - Using a python interpreter that has Isaac Lab installed, install the library
