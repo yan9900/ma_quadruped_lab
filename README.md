@@ -14,6 +14,9 @@ This repository provides a direct workflow for training a legged robot using Isa
 
 It has all the necessary conditions for sim-to-real and has been tested on real unitree h1 robots.
 
+**Maintainer**: Wandong Sun
+**Contact**: 24b908020@stu.hit.edu.cn  
+
 **Key Features:**
 
 - `Easy to Reorganize` Provides a direct workflow, allowing for fine-grained definition of environment logic.
