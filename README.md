@@ -12,6 +12,8 @@
 
 This repository provides a direct workflow for training a legged robot using IsaacLab. It provides high transparency and low refactoring difficulty of the direct environment, and uses isaaclab components to simplify the workflow.
 
+It has all the necessary conditions for sim-to-real and has been tested on real unitree h1 robots.
+
 **Key Features:**
 
 - `Easy to Reorganize` Provides a direct workflow, allowing for fine-grained definition of environment logic.
