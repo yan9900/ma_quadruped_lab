@@ -47,7 +47,7 @@ class GR2FlatEnvCfg(BaseEnvCfg):
     )
     robot = RobotCfg(
         terminate_contacts_body_names=[".*torso.*"],
-        feet_names=[".*foot_pitch.*"]
+        feet_body_names=[".*foot_pitch.*"]
     )
     domain_rand = DomainRandCfg(
         add_rigid_body_mass=AddRigidBodyMassCfg(
@@ -83,7 +83,7 @@ class GR2RoughEnvCfg(GR2FlatEnvCfg):
         actor_obs_history_length=1,
         critic_obs_history_length=1,
         terminate_contacts_body_names=[".*torso.*"],
-        feet_names=[".*ankle_roll.*"]
+        feet_body_names=[".*foot_pitch.*"]
     )
     reward = GR2RewardCfg(
         track_lin_vel_xy_exp=RewTerm(func=mdp.track_lin_vel_xy_yaw_frame_exp, weight=1.5, params={"std": 0.5}),

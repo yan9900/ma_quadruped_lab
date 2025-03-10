@@ -24,7 +24,7 @@ class AnymalDSceneCfg(BaseSceneCfg):
 @configclass
 class AnymalDRobotCfg(RobotCfg):
     terminate_contacts_body_names: list = [".*base.*"]
-    feet_names: list = [".*FOOT.*"]
+    feet_body_names: list = [".*FOOT.*"]
 
 
 @configclass
@@ -63,7 +63,7 @@ class AnymalDRewardCfg(RewardCfg):
 class AnymalDFlatEnvCfg(BaseEnvCfg):
     scene = BaseSceneCfg(
         height_scanner=HeightScannerCfg(
-            enable_height_scan=True,
+            enable_height_scan=False,
             prim_body_name="base"
         ),
         robot=ANYMAL_D_CFG,
@@ -72,7 +72,7 @@ class AnymalDFlatEnvCfg(BaseEnvCfg):
     )
     robot = RobotCfg(
         terminate_contacts_body_names=[".*base.*"],
-        feet_names=[".*FOOT.*"]
+        feet_body_names=[".*FOOT.*"]
     )
     domain_rand = DomainRandCfg(
         add_rigid_body_mass=AddRigidBodyMassCfg(
@@ -97,7 +97,7 @@ class AnymalDFlatAgentCfg(BaseAgentCfg):
 class AnymalDRoughEnvCfg(AnymalDFlatEnvCfg):
     scene = BaseSceneCfg(
         height_scanner=HeightScannerCfg(
-            enable_height_scan=False,
+            enable_height_scan=True,
             prim_body_name="base"
         ),
         robot=ANYMAL_D_CFG,
@@ -108,7 +108,7 @@ class AnymalDRoughEnvCfg(AnymalDFlatEnvCfg):
         actor_obs_history_length=1,
         critic_obs_history_length=1,
         terminate_contacts_body_names=[".*base.*"],
-        feet_names=[".*FOOT.*"]
+        feet_body_names=[".*FOOT.*"]
     )
     reward = AnymalDRewardCfg(
         track_lin_vel_xy_exp=RewTerm(func=mdp.track_lin_vel_xy_yaw_frame_exp, weight=1.5, params={"std": 0.5}),

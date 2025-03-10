@@ -31,7 +31,7 @@ class BaseEnvCfg:
         critic_obs_history_length=10,
         action_scale=0.25,
         terminate_contacts_body_names=[],
-        feet_names=[],
+        feet_body_names=[],
     )
     reward = RewardCfg()
     normalization: NormalizationCfg = NormalizationCfg(

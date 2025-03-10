@@ -84,7 +84,7 @@ class BaseEnv(VecEnv):
         self.robot_cfg.resolve(self.scene)
         self.termination_contact_cfg = SceneEntityCfg(name="contact_sensor", body_names=self.cfg.robot.terminate_contacts_body_names)
         self.termination_contact_cfg.resolve(self.scene)
-        self.feet_cfg = SceneEntityCfg(name="contact_sensor", body_names=self.cfg.robot.feet_names)
+        self.feet_cfg = SceneEntityCfg(name="contact_sensor", body_names=self.cfg.robot.feet_body_names)
         self.feet_cfg.resolve(self.scene)
 
         self.obs_scales = self.cfg.normalization.obs_scales

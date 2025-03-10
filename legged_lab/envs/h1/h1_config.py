@@ -47,7 +47,7 @@ class H1FlatEnvCfg(BaseEnvCfg):
     )
     robot = RobotCfg(
         terminate_contacts_body_names=[".*torso.*"],
-        feet_names=[".*ankle.*"]
+        feet_body_names=[".*ankle.*"]
     )
     domain_rand = DomainRandCfg(
         add_rigid_body_mass=AddRigidBodyMassCfg(
@@ -83,7 +83,7 @@ class H1RoughEnvCfg(H1FlatEnvCfg):
         actor_obs_history_length=1,
         critic_obs_history_length=1,
         terminate_contacts_body_names=[".*torso.*"],
-        feet_names=[".*ankle.*"]
+        feet_body_names=[".*ankle.*"]
     )
     reward = H1RewardCfg(
         track_lin_vel_xy_exp=RewTerm(func=mdp.track_lin_vel_xy_yaw_frame_exp, weight=1.5, params={"std": 0.5}),
