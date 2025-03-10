@@ -42,7 +42,7 @@ git clone git@github.com:Hellod035/legged_lab.git
 - Using a python interpreter that has Isaac Lab installed, install the library
 
 ```bash
-pip install -e Legged_Lab
+pip install -e legged_lab
 ```
 
 - Verify that the extension is correctly installed by running the following command:
