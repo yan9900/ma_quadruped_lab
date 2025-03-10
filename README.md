@@ -16,6 +16,7 @@ This repository provides a direct workflow for training a legged robot using Isa
 
 - `Easy to Reorganize` Provides a direct workflow, allowing for fine-grained definition of environment logic.
 - `Isolation` Work outside the core Isaac Lab repository, ensuring that the development efforts remain self-contained.
+- `Long-term support` This repository will be updated with the updates of isaac sim and isaac lab, and will be supported for a long time.
 
 
 ## Installation
