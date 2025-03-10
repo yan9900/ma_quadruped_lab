@@ -14,7 +14,7 @@ This repository provides a direct workflow for training a legged robot using Isa
 
 **Key Features:**
 
-- `Direct` Provides a direct workflow, allowing for fine-grained definition of environment logic.
+- `Easy to Reorganize` Provides a direct workflow, allowing for fine-grained definition of environment logic.
 - `Isolation` Work outside the core Isaac Lab repository, ensuring that the development efforts remain self-contained.
 
 
@@ -83,4 +83,4 @@ Some examples of packages that can likely be excluded are:
 This project repository builds upon the shoulders of giants. 
 * [IsaacLab](https://github.com/isaac-sim/IsaacLab)   The various reusable practical components in IsaacLab greatly simplify the complexity of LeggedLab.
 * [legged_gym](https://github.com/leggedrobotics/legged_gym)   We borrowed the code organization and environment definition logic of legged_gym and simplified it as much as possible.
-* [Protomotions](https://github.com/NVlabs/ProtoMotions)   The whole library is inspired by ProtoMotions. For the first time, we thought that we could create our own environment using only IsaacLab components without inheriting DirectRLEnv or ManagerBasedRLEnv.
+* [Protomotions](https://github.com/NVlabs/ProtoMotions)   The motivation for building this repository comes from protomotions. For the first time, we realized that we could create our own environment using only IsaacLab components without inheriting 'DirectRLEnv' or 'ManagerBasedRLEnv'.
