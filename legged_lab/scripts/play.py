@@ -32,7 +32,7 @@ from legged_lab.utils.cli_args import update_rsl_rl_cfg
 from isaaclab_tasks.utils import get_checkpoint_path
 
 
-def train():
+def play():
     runner: OnPolicyRunner
     env_cfg: BaseEnvCfg  # noqa:F405
 
@@ -97,5 +97,5 @@ def train():
 
 
 if __name__ == '__main__':
-    train()
+    play()
     simulation_app.close()
