@@ -51,6 +51,11 @@ pip install -e legged_lab
 python legged_lab/scripts/train.py --task=h1_flat --headless --logger=tensorboard --num_envs=64
 ```
 
+
+## Use Your Own Robot
+
+Assets must be converted into USD format to be compatible with Legged Lab/IsaacLab, [Convert Tutorial](https://isaac-sim.github.io/IsaacLab/main/source/how-to/import_new_asset.html).
+
 ## Troubleshooting
 
 ### Pylance Missing Indexing of Extensions
