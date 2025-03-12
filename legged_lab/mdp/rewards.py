@@ -14,14 +14,14 @@ if TYPE_CHECKING:
 
 def track_lin_vel_xy_yaw_frame_exp(env: BaseEnv, std: float, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]
-    vel_yaw = math_utils.quat_rotate_inverse(math_utils.yaw_quat(asset.data.root_link_quat_w), asset.data.root_com_lin_vel_w[:, :3])
+    vel_yaw = math_utils.quat_rotate_inverse(math_utils.yaw_quat(asset.data.root_quat_w), asset.data.root_lin_vel_w[:, :3])
     lin_vel_error = torch.sum(torch.square(env.command_generator.command[:, :2] - vel_yaw[:, :2]), dim=1)
     return torch.exp(-lin_vel_error / std**2)
 
 
 def track_ang_vel_z_world_exp(env: BaseEnv, std: float, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]
-    ang_vel_error = torch.square(env.command_generator.command[:, 2] - asset.data.root_com_ang_vel_w[:, 2])
+    ang_vel_error = torch.square(env.command_generator.command[:, 2] - asset.data.root_ang_vel_w[:, 2])
     return torch.exp(-ang_vel_error / std**2)
 
 
@@ -36,7 +36,7 @@ def ang_vel_xy_l2(env: BaseEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robo
 
 
 def energy(env: BaseEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
-    asset = env.scene[asset_cfg.name]
+    asset: Articulation = env.scene[asset_cfg.name]
     reward = torch.norm(torch.abs(asset.data.applied_torque * asset.data.joint_vel), dim=-1)
     return reward
 
@@ -92,7 +92,7 @@ def feet_slide(env: BaseEnv, sensor_cfg: SceneEntityCfg, asset_cfg: SceneEntityC
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
     contacts = contact_sensor.data.net_forces_w_history[:, :, sensor_cfg.body_ids, :].norm(dim=-1).max(dim=1)[0] > 1.0
     asset: Articulation = env.scene[asset_cfg.name]
-    body_vel = asset.data.body_com_lin_vel_w[:, asset_cfg.body_ids, :2]
+    body_vel = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2]
     reward = torch.sum(body_vel.norm(dim=-1) * contacts, dim=1)
     return reward
 
