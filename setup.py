@@ -5,6 +5,6 @@ setup(
     name='legged_lab',
     packages=find_packages(),
     install_requires=[
-        'isaacsim',
+        # 'isaacsim',
         'IsaacLab',]
 )
