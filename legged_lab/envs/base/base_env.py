@@ -33,10 +33,16 @@ class BaseEnv(VecEnv):
             physx=PhysxCfg(
                 gpu_max_rigid_patch_count=cfg.sim.physx.gpu_max_rigid_patch_count
             ),
+            physics_material=sim_utils.RigidBodyMaterialCfg(
+                friction_combine_mode="multiply",
+                restitution_combine_mode="multiply",
+                static_friction=1.0,
+                dynamic_friction=1.0,
+            ),
         )
         self.sim = SimulationContext(sim_cfg)
 
-        scene_cfg = SceneCfg(config=cfg.scene)
+        scene_cfg = SceneCfg(config=cfg.scene, physics_dt=self.physics_dt, step_dt=self.step_dt)
         self.scene = InteractiveScene(scene_cfg)
         self.sim.reset()
 
@@ -157,20 +163,8 @@ class BaseEnv(VecEnv):
                 self.extras["log"].update(terrain_levels)
 
         self.scene.reset(env_ids)
-        reset_joints_by_scale(
-            env=self,
-            env_ids=env_ids,
-            position_range=self.cfg.domain_rand.reset_robot_joints.params["position_range"],
-            velocity_range=self.cfg.domain_rand.reset_robot_joints.params["velocity_range"],
-            asset_cfg=self.robot_cfg,
-        )
-        reset_root_state_uniform(
-            env=self,
-            env_ids=env_ids,
-            pose_range=self.cfg.domain_rand.reset_robot_base.params["pose_range"],
-            velocity_range=self.cfg.domain_rand.reset_robot_base.params["velocity_range"],
-            asset_cfg=self.robot_cfg,
-        )
+        reset_joints_by_scale(env=self, env_ids=env_ids, position_range=self.cfg.domain_rand.reset_robot_joints.params["position_range"], velocity_range=self.cfg.domain_rand.reset_robot_joints.params["velocity_range"], asset_cfg=self.robot_cfg)
+        reset_root_state_uniform(env=self, env_ids=env_ids, pose_range=self.cfg.domain_rand.reset_robot_base.params["pose_range"], velocity_range=self.cfg.domain_rand.reset_robot_base.params["velocity_range"], asset_cfg=self.robot_cfg)
 
         reward_extras = self.reward_maneger.reset(env_ids)
         self.extras['log'].update(reward_extras)
@@ -216,12 +210,7 @@ class BaseEnv(VecEnv):
         if self.cfg.domain_rand.push_robot.enable:
             env_ids = (self.episode_length_buf % int(self.cfg.domain_rand.push_robot.push_interval_s / self.step_dt) == 0).nonzero(as_tuple=False).flatten()
             if len(env_ids) != 0:
-                push_by_setting_velocity(
-                    env=self,
-                    env_ids=env_ids,
-                    velocity_range=self.cfg.domain_rand.push_robot.params["velocity_range"],
-                    asset_cfg=self.robot_cfg,
-                )
+                push_by_setting_velocity(env=self, env_ids=env_ids, velocity_range=self.cfg.domain_rand.push_robot.params["velocity_range"], asset_cfg=self.robot_cfg,)
 
     def check_reset(self):
         net_contact_forces = self.contact_sensor.data.net_forces_w_history

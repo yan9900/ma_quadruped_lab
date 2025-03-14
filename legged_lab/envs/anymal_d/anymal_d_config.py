@@ -61,30 +61,18 @@ class AnymalDRewardCfg(RewardCfg):
 
 @configclass
 class AnymalDFlatEnvCfg(BaseEnvCfg):
-    scene = BaseSceneCfg(
-        height_scanner=HeightScannerCfg(
-            enable_height_scan=False,
-            prim_body_name="base"
-        ),
-        robot=ANYMAL_D_CFG,
-        terrain_type="generator",
-        terrain_generator=GRAVEL_TERRAINS_CFG
-    )
-    robot = RobotCfg(
-        terminate_contacts_body_names=[".*base.*"],
-        feet_body_names=[".*FOOT.*"]
-    )
-    domain_rand = DomainRandCfg(
-        add_rigid_body_mass=AddRigidBodyMassCfg(
-            enable=True,
-            params={
-                "body_names": [".*base.*"],
-                "mass_distribution_params": (-5.0, 5.0),
-                "operation": "add"
-            }
-        )
-    )
+
     reward = AnymalDRewardCfg()
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.height_scanner.prim_body_name = "base"
+        self.scene.robot = ANYMAL_D_CFG
+        self.scene.terrain_type = "generator"
+        self.scene.terrain_generator = GRAVEL_TERRAINS_CFG
+        self.robot.terminate_contacts_body_names = [".*base.*"]
+        self.robot.feet_body_names = [".*FOOT.*"]
+        self.domain_rand.add_rigid_body_mass.params["body_names"] = [".*base.*"]
 
 
 @configclass
@@ -95,26 +83,15 @@ class AnymalDFlatAgentCfg(BaseAgentCfg):
 
 @configclass
 class AnymalDRoughEnvCfg(AnymalDFlatEnvCfg):
-    scene = BaseSceneCfg(
-        height_scanner=HeightScannerCfg(
-            enable_height_scan=True,
-            prim_body_name="base"
-        ),
-        robot=ANYMAL_D_CFG,
-        terrain_type="generator",
-        terrain_generator=ROUGH_TERRAINS_CFG
-    )
-    robot = RobotCfg(
-        actor_obs_history_length=1,
-        critic_obs_history_length=1,
-        terminate_contacts_body_names=[".*base.*"],
-        feet_body_names=[".*FOOT.*"]
-    )
-    reward = AnymalDRewardCfg(
-        track_lin_vel_xy_exp=RewTerm(func=mdp.track_lin_vel_xy_yaw_frame_exp, weight=1.5, params={"std": 0.5}),
-        track_ang_vel_z_exp=RewTerm(func=mdp.track_ang_vel_z_world_exp, weight=1.5, params={"std": 0.5}),
-        lin_vel_z_l2=RewTerm(func=mdp.lin_vel_z_l2, weight=-0.25)
-    )
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.height_scanner.enable_height_scan = True
+        self.robot.actor_obs_history_length = 1
+        self.robot.critic_obs_history_length = 1
+        self.reward.track_lin_vel_xy_exp.weight = 1.5
+        self.reward.track_ang_vel_z_exp.weight = 1.5
+        self.reward.lin_vel_z_l2.weight = -0.25
 
 
 @configclass

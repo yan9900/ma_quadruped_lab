@@ -19,6 +19,8 @@ class SceneCfg(InteractiveSceneCfg):
     def __init__(
         self,
         config: "BaseSceneCfg",
+        physics_dt,
+        step_dt
     ):
         super().__init__(num_envs=config.num_envs, env_spacing=config.env_spacing)
 
@@ -44,7 +46,7 @@ class SceneCfg(InteractiveSceneCfg):
 
         self.robot: ArticulationCfg = config.robot.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
-        self.contact_sensor = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True)
+        self.contact_sensor = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True, update_period=physics_dt)
 
         self.light = AssetBaseCfg(
             prim_path="/World/light",
@@ -66,4 +68,5 @@ class SceneCfg(InteractiveSceneCfg):
                 pattern_cfg=patterns.GridPatternCfg(resolution=config.height_scanner.resolution, size=config.height_scanner.size),
                 debug_vis=config.height_scanner.debug_vis,
                 mesh_prim_paths=["/World/ground"],
+                update_period=step_dt
             )

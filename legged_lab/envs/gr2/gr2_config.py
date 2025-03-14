@@ -36,30 +36,18 @@ class GR2RewardCfg(RewardCfg):
 
 @configclass
 class GR2FlatEnvCfg(BaseEnvCfg):
-    scene = BaseSceneCfg(
-        height_scanner=HeightScannerCfg(
-            enable_height_scan=False,
-            prim_body_name="torso_link"
-        ),
-        robot=GR2_CFG,
-        terrain_type="generator",
-        terrain_generator=GRAVEL_TERRAINS_CFG
-    )
-    robot = RobotCfg(
-        terminate_contacts_body_names=[".*torso.*"],
-        feet_body_names=[".*foot_pitch.*"]
-    )
-    domain_rand = DomainRandCfg(
-        add_rigid_body_mass=AddRigidBodyMassCfg(
-            enable=True,
-            params={
-                "body_names": [".*torso.*"],
-                "mass_distribution_params": (-5.0, 5.0),
-                "operation": "add"
-            }
-        )
-    )
+
     reward = GR2RewardCfg()
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.height_scanner.prim_body_name = "torso_link"
+        self.scene.robot = GR2_CFG
+        self.scene.terrain_type = "generator"
+        self.scene.terrain_generator = GRAVEL_TERRAINS_CFG
+        self.robot.terminate_contacts_body_names = [".*torso.*"]
+        self.robot.feet_body_names = [".*foot_pitch.*"]
+        self.domain_rand.add_rigid_body_mass.params["body_names"] = [".*torso.*"]
 
 
 @configclass
@@ -70,26 +58,16 @@ class GR2FlatAgentCfg(BaseAgentCfg):
 
 @configclass
 class GR2RoughEnvCfg(GR2FlatEnvCfg):
-    scene = BaseSceneCfg(
-        height_scanner=HeightScannerCfg(
-            enable_height_scan=True,
-            prim_body_name="torso_link"
-        ),
-        robot=GR2_CFG,
-        terrain_type="generator",
-        terrain_generator=ROUGH_TERRAINS_CFG
-    )
-    robot = RobotCfg(
-        actor_obs_history_length=1,
-        critic_obs_history_length=1,
-        terminate_contacts_body_names=[".*torso.*"],
-        feet_body_names=[".*foot_pitch.*"]
-    )
-    reward = GR2RewardCfg(
-        track_lin_vel_xy_exp=RewTerm(func=mdp.track_lin_vel_xy_yaw_frame_exp, weight=1.5, params={"std": 0.5}),
-        track_ang_vel_z_exp=RewTerm(func=mdp.track_ang_vel_z_world_exp, weight=1.5, params={"std": 0.5}),
-        lin_vel_z_l2=RewTerm(func=mdp.lin_vel_z_l2, weight=-0.25)
-    )
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.scene.height_scanner.enable_height_scan = True
+
+        self.robot.actor_obs_history_length = 1
+        self.robot.critic_obs_history_length = 1
+        self.reward.track_lin_vel_xy_exp.weight = 1.5
+        self.reward.track_ang_vel_z_exp.weight = 1.5
+        self.reward.lin_vel_z_l2.weight = -0.25
 
 
 @configclass

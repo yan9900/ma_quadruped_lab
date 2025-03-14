@@ -103,7 +103,6 @@ class BaseEnvCfg:
                 "restitution_range": [0.0, 0.005],
                 "num_buckets": 64,
             }
-
         ),
         add_rigid_body_mass=AddRigidBodyMassCfg(
             enable=True,
@@ -131,6 +130,9 @@ class BaseEnvCfg:
             gpu_max_rigid_patch_count=10 * 2**15
         )
     )
+
+    def __post_init__(self):
+        pass
 
 
 @configclass
@@ -169,3 +171,6 @@ class BaseAgentCfg:
         desired_kl=0.01,
         max_grad_norm=1.0,
     )
+
+    def __post_init__(self):
+        pass
