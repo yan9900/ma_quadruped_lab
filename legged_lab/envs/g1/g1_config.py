@@ -63,6 +63,7 @@ class G1RoughEnvCfg(G1FlatEnvCfg):
     def __post_init__(self):
         super().__post_init__()
         self.scene.height_scanner.enable_height_scan = True
+        self.scene.terrain_generator = ROUGH_TERRAINS_CFG
         self.robot.actor_obs_history_length = 1
         self.robot.critic_obs_history_length = 1
         self.reward.track_lin_vel_xy_exp.weight = 1.5
