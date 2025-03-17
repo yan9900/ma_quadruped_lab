@@ -222,12 +222,12 @@ G1_CFG = ArticulationCfg(
                 ".*_shoulder_roll_joint",
             ],
             effort_limit_sim={
-                ".*_shoulder_pitch_joint": 25,
-                ".*_shoulder_roll_joint": 25,
+                ".*_shoulder_pitch_joint": 25.0,
+                ".*_shoulder_roll_joint": 25.0,
             },
             velocity_limit_sim={
-                ".*_shoulder_pitch_joint": 37,
-                ".*_shoulder_roll_joint": 37,
+                ".*_shoulder_pitch_joint": 37.0,
+                ".*_shoulder_roll_joint": 37.0,
             },
             stiffness=100.0,
             damping=2.0,
