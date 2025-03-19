@@ -144,10 +144,10 @@ class BaseEnv(VecEnv):
         actor_obs = self.actor_obs_buffer.buffer.reshape(self.num_envs, -1)
         critic_obs = self.critic_obs_buffer.buffer.reshape(self.num_envs, -1)
         if self.cfg.scene.height_scanner.enable_height_scan:
-            height_scan = (self.height_scanner.data.pos_w[:, 2].unsqueeze(1) - self.height_scanner.data.ray_hits_w[..., 2] - self.cfg.normalization.height_scan_offset)
+            height_scan = (self.height_scanner.data.pos_w[:, 2].unsqueeze(1) - self.height_scanner.data.ray_hits_w[..., 2] - self.cfg.normalization.height_scan_offset) * self.obs_scales.height_scan
             if self.add_noise:
                 height_scan += (2 * torch.rand_like(height_scan) - 1) * self.height_scan_noise_vec
-            height_scan = torch.clip(height_scan, -self.clip_obs, self.clip_obs) * self.obs_scales.height_scan
+            height_scan = torch.clip(height_scan, -self.clip_obs, self.clip_obs)
             actor_obs = torch.cat([actor_obs, height_scan], dim=-1)
             critic_obs = torch.cat([critic_obs, height_scan], dim=-1)
         return actor_obs, critic_obs
