@@ -13,6 +13,7 @@ from isaaclab.envs.mdp.commands import UniformVelocityCommand, UniformVelocityCo
 from isaaclab.envs.mdp.events import randomize_rigid_body_material, randomize_rigid_body_mass, reset_joints_by_scale, reset_root_state_uniform, push_by_setting_velocity
 from isaaclab.managers import RewardManager
 from isaaclab.utils.buffers import CircularBuffer, DelayBuffer
+import isaacsim.core.utils.torch as torch_utils
 
 
 class BaseEnv(VecEnv):
@@ -25,6 +26,7 @@ class BaseEnv(VecEnv):
         self.physics_dt = self.cfg.sim.dt
         self.step_dt = self.cfg.sim.decimation * self.cfg.sim.dt
         self.num_envs = self.cfg.scene.num_envs
+        self.seed(cfg.scene.seed)
 
         sim_cfg = sim_utils.SimulationCfg(
             device=cfg.device,
@@ -176,6 +178,9 @@ class BaseEnv(VecEnv):
         self.action_buffer.reset(env_ids)
         self.episode_length_buf[env_ids] = 0
 
+        self.scene.write_data_to_sim()
+        self.sim.forward()
+
     def step(self, actions: torch.Tensor):
 
         delayed_actions = self.action_buffer.compute(actions)
@@ -195,7 +200,7 @@ class BaseEnv(VecEnv):
         self.episode_length_buf += 1
         self.post_step_callback()
 
-        self.check_reset()
+        self.reset_buf, self.time_out_buf = self.check_reset()
         reward_buf = self.reward_maneger.compute(self.step_dt)
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset(env_ids)
@@ -215,9 +220,10 @@ class BaseEnv(VecEnv):
     def check_reset(self):
         net_contact_forces = self.contact_sensor.data.net_forces_w_history
 
-        self.reset_buf = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.termination_contact_cfg.body_ids], dim=-1,), dim=1,)[0] > 1.0, dim=1)
-        self.time_out_buf = self.episode_length_buf >= self.max_episode_length
-        self.reset_buf |= self.time_out_buf
+        reset_buf = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.termination_contact_cfg.body_ids], dim=-1,), dim=1,)[0] > 1.0, dim=1)
+        time_out_buf = self.episode_length_buf >= self.max_episode_length
+        reset_buf |= time_out_buf
+        return reset_buf, time_out_buf
 
     def apply_domain_random_at_start(self, env_ids):
         if self.cfg.domain_rand.randomize_robot_friction.enable:
@@ -281,3 +287,12 @@ class BaseEnv(VecEnv):
         actor_obs, critic_obs = self.compute_observations()
         self.extras["observations"] = {"critic": critic_obs}
         return actor_obs, self.extras
+
+    @staticmethod
+    def seed(seed: int = -1) -> int:
+        try:
+            import omni.replicator.core as rep
+            rep.set_global_seed(seed)
+        except ModuleNotFoundError:
+            pass
+        return torch_utils.set_seed(seed)

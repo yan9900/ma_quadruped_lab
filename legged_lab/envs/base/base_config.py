@@ -21,6 +21,7 @@ class HeightScannerCfg:
 
 @configclass
 class BaseSceneCfg:
+    seed: int = 42
     max_episode_length_s: float = 20.0
     num_envs: int = 4096
     env_spacing: float = 2.5
