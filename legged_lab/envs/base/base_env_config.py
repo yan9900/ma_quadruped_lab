@@ -11,6 +11,7 @@ from .base_config import BaseSceneCfg, HeightScannerCfg, RobotCfg, RewardCfg, \
 class BaseEnvCfg:
     device: str = "cuda:0"
     scene: BaseSceneCfg = BaseSceneCfg(
+        seed=42,
         max_episode_length_s=20.0,
         num_envs=4096,
         env_spacing=2.5,
