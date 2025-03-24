@@ -33,6 +33,7 @@ class G1RewardCfg(RewardCfg):
     joint_deviation_hip = RewTerm(func=mdp.joint_deviation_l1, weight=-0.15, params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_yaw.*", ".*_hip_roll.*", ".*_shoulder_pitch.*", ".*_elbow.*"])})
     joint_deviation_arms = RewTerm(func=mdp.joint_deviation_l1, weight=-0.2, params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*waist.*", ".*_shoulder_roll.*", ".*_shoulder_yaw.*", ".*_wrist.*"])})
     joint_deviation_legs = RewTerm(func=mdp.joint_deviation_l1, weight=-0.02, params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_hip_pitch.*", ".*_knee.*", ".*_ankle.*"])})
+    joint_symmetry = RewTerm(func=mdp.joint_symmetry, weight=0.2, params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_shoulder_pitch.*"]), "std": 0.5})
 
 
 @configclass
@@ -66,7 +67,9 @@ class G1RoughEnvCfg(G1FlatEnvCfg):
         self.scene.terrain_generator = ROUGH_TERRAINS_CFG
         self.robot.actor_obs_history_length = 1
         self.robot.critic_obs_history_length = 1
-        self.reward.track_lin_vel_xy_exp.weight = 1.5
+        self.reward.feet_air_time.weight = 0.25
+        self.reward.track_lin_vel_xy_exp_relax = RewTerm(func=mdp.track_lin_vel_xy_yaw_frame_exp, weight=1.0, params={"std": 0.7})
+        self.reward.track_lin_vel_xy_exp.weight = 0.5
         self.reward.track_ang_vel_z_exp.weight = 1.5
         self.reward.lin_vel_z_l2.weight = -0.25
 

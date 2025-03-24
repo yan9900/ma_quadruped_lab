@@ -17,6 +17,7 @@ class HeightScannerCfg:
     resolution: float = 0.1
     size: tuple = (1.6, 1.0)
     debug_vis: bool = False
+    drift_range: tuple = (0.0, 0.0)
 
 
 @configclass

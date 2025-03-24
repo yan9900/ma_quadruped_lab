@@ -26,7 +26,6 @@ simulation_app = app_launcher.app
 
 from isaaclab_rl.rsl_rl import export_policy_as_jit, export_policy_as_onnx
 
-import isaacsim.core.utils.torch as torch_utils
 from legged_lab.envs import *  # noqa:F401, F403
 from legged_lab.utils.cli_args import update_rsl_rl_cfg
 from isaaclab_tasks.utils import get_checkpoint_path
@@ -47,6 +46,7 @@ def play():
     env_cfg.commands.ranges.lin_vel_x = (0.6, 0.6)
     env_cfg.commands.ranges.lin_vel_y = (0.0, 0.0)
     env_cfg.commands.ranges.heading = (0.0, 0.0)
+    # env_cfg.scene.height_scanner.drift_range = (0.0, 0.0)
 
     # env_cfg.scene.terrain_generator = None
     # env_cfg.scene.terrain_type = "plane"
