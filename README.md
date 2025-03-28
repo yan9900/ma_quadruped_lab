@@ -25,6 +25,18 @@ Deploy Code: https://github.com/Hellod035/unitree_deploy_py
 - `Isolation` Work outside the core Isaac Lab repository, ensuring that the development efforts remain self-contained.
 - `Long-term support` This repository will be updated with the updates of isaac sim and isaac lab, and will be supported for a long time.
 
+If you use Legged Lab in your research, please cite it as follows:
+
+```bibtex
+@software{LeggedLab,
+  author = {Wandong, Sun},
+  license = {CC-BY-4.0},
+  title = {{Legged Lab: Direct IsaacLab Workflow for Legged Robots}},
+  url = {https://github.com/Hellod035/LeggedLab},
+  version = {0.0.1},
+  year = {2025}
+}
+```
 
 ## Installation
 
@@ -34,16 +46,17 @@ Deploy Code: https://github.com/Hellod035/unitree_deploy_py
 
 ```bash
 # Option 1: HTTPS
-git clone https://github.com/Hellod035/legged_lab
+git clone https://github.com/Hellod035/LeggedLab
 
 # Option 2: SSH
-git clone git@github.com:Hellod035/legged_lab.git
+git clone git@github.com:Hellod035/LeggedLab.git
 ```
 
 - Using a python interpreter that has Isaac Lab installed, install the library
 
 ```bash
-pip install -e legged_lab
+cd LeggedLab
+pip install -e .
 ```
 
 - Verify that the extension is correctly installed by running the following command:
