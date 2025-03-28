@@ -31,7 +31,7 @@ If you use Legged Lab in your research, please cite it as follows:
 @software{LeggedLab,
   author = {Wandong, Sun},
   license = {CC-BY-4.0},
-  title = {{Legged Lab: Direct IsaacLab Workflow for Legged Robots}},
+  title = {Legged Lab: Direct IsaacLab Workflow for Legged Robots},
   url = {https://github.com/Hellod035/LeggedLab},
   version = {0.0.1},
   year = {2025}
