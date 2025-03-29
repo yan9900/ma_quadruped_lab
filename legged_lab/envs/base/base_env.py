@@ -64,7 +64,7 @@ class BaseEnv(VecEnv):
             ranges=self.cfg.commands.ranges,
         )
         self.command_generator = UniformVelocityCommand(cfg=command_cfg, env=self)
-        self.reward_maneger = RewardManager(self.cfg.reward, self)
+        self.reward_manager = RewardManager(self.cfg.reward, self)
 
         self.init_buffers()
 
@@ -168,7 +168,7 @@ class BaseEnv(VecEnv):
         reset_joints_by_scale(env=self, env_ids=env_ids, position_range=self.cfg.domain_rand.reset_robot_joints.params["position_range"], velocity_range=self.cfg.domain_rand.reset_robot_joints.params["velocity_range"], asset_cfg=self.robot_cfg)
         reset_root_state_uniform(env=self, env_ids=env_ids, pose_range=self.cfg.domain_rand.reset_robot_base.params["pose_range"], velocity_range=self.cfg.domain_rand.reset_robot_base.params["velocity_range"], asset_cfg=self.robot_cfg)
 
-        reward_extras = self.reward_maneger.reset(env_ids)
+        reward_extras = self.reward_manager.reset(env_ids)
         self.extras['log'].update(reward_extras)
         self.extras["time_outs"] = self.time_out_buf
 
@@ -201,7 +201,7 @@ class BaseEnv(VecEnv):
         self.post_step_callback()
 
         self.reset_buf, self.time_out_buf = self.check_reset()
-        reward_buf = self.reward_maneger.compute(self.step_dt)
+        reward_buf = self.reward_manager.compute(self.step_dt)
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset(env_ids)
 
