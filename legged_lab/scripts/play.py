@@ -13,6 +13,7 @@ import legged_lab.utils.cli_args as cli_args  # isort: skip
 parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
+parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
@@ -46,7 +47,7 @@ def play():
     env_cfg.commands.ranges.lin_vel_x = (0.6, 0.6)
     env_cfg.commands.ranges.lin_vel_y = (0.0, 0.0)
     env_cfg.commands.ranges.heading = (0.0, 0.0)
-    # env_cfg.scene.height_scanner.drift_range = (0.0, 0.0)
+    env_cfg.scene.height_scanner.drift_range = (0.0, 0.0)
 
     # env_cfg.scene.terrain_generator = None
     # env_cfg.scene.terrain_type = "plane"
@@ -60,10 +61,12 @@ def play():
     if args_cli.num_envs is not None:
         env_cfg.scene.num_envs = args_cli.num_envs
 
+    agent_cfg = update_rsl_rl_cfg(agent_cfg, args_cli)
+    env_cfg.scene.seed = agent_cfg.seed
+
     env_class = task_registry.get_task_class(env_class_name)
     env = env_class(env_cfg, args_cli.headless)
 
-    agent_cfg = update_rsl_rl_cfg(agent_cfg, args_cli)
     log_root_path = os.path.join("logs", agent_cfg.experiment_name)
     log_root_path = os.path.abspath(log_root_path)
     print(f"[INFO] Loading experiment from directory: {log_root_path}")

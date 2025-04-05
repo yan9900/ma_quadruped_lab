@@ -13,7 +13,7 @@ from isaaclab.envs.mdp.commands import UniformVelocityCommand, UniformVelocityCo
 from isaaclab.envs.mdp.events import randomize_rigid_body_material, randomize_rigid_body_mass, reset_joints_by_scale, reset_root_state_uniform, push_by_setting_velocity
 from isaaclab.managers import RewardManager
 from isaaclab.utils.buffers import CircularBuffer, DelayBuffer
-import isaacsim.core.utils.torch as torch_utils
+import isaacsim.core.utils.torch as torch_utils  # type: ignore
 
 
 class BaseEnv(VecEnv):
@@ -257,17 +257,17 @@ class BaseEnv(VecEnv):
             noise_scales = self.cfg.noise.noise_scales
             noise_level = self.cfg.noise.noise_level
             noise_vec[:3] = noise_scales.ang_vel * noise_level * self.obs_scales.ang_vel
-            noise_vec[3:6] = (noise_scales.projected_gravity * noise_level * self.obs_scales.projected_gravity)
+            noise_vec[3:6] = noise_scales.projected_gravity * noise_level * self.obs_scales.projected_gravity
             noise_vec[6:9] = 0
-            noise_vec[9 : 9 + self.num_actions] = (noise_scales.joint_pos * noise_level * self.obs_scales.joint_pos)
-            noise_vec[9 + self.num_actions : 9 + self.num_actions * 2] = (noise_scales.joint_vel * noise_level * self.obs_scales.joint_vel)
+            noise_vec[9 : 9 + self.num_actions] = noise_scales.joint_pos * noise_level * self.obs_scales.joint_pos
+            noise_vec[9 + self.num_actions : 9 + self.num_actions * 2] = noise_scales.joint_vel * noise_level * self.obs_scales.joint_vel
             noise_vec[9 + self.num_actions * 2 : 9 + self.num_actions * 3] = 0.0
             self.noise_scale_vec = noise_vec
 
             if self.cfg.scene.height_scanner.enable_height_scan:
                 height_scan = (self.height_scanner.data.pos_w[:, 2].unsqueeze(1) - self.height_scanner.data.ray_hits_w[..., 2] - self.cfg.normalization.height_scan_offset)
                 height_scan_noise_vec = torch.zeros_like(height_scan[0])
-                height_scan_noise_vec[:] = (noise_scales.height_scan * noise_level * self.obs_scales.height_scan)
+                height_scan_noise_vec[:] = noise_scales.height_scan * noise_level * self.obs_scales.height_scan
                 self.height_scan_noise_vec = height_scan_noise_vec
 
         self.actor_obs_buffer = CircularBuffer(max_len=self.cfg.robot.actor_obs_history_length, batch_size=self.num_envs, device=self.device)
@@ -291,7 +291,7 @@ class BaseEnv(VecEnv):
     @staticmethod
     def seed(seed: int = -1) -> int:
         try:
-            import omni.replicator.core as rep
+            import omni.replicator.core as rep  # type: ignore
             rep.set_global_seed(seed)
         except ModuleNotFoundError:
             pass

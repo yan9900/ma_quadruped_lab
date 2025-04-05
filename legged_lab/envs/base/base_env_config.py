@@ -33,8 +33,8 @@ class BaseEnvCfg:
         actor_obs_history_length=10,
         critic_obs_history_length=10,
         action_scale=0.25,
-        terminate_contacts_body_names=[],
-        feet_body_names=[],
+        terminate_contacts_body_names=MISSING,
+        feet_body_names=MISSING,
     )
     reward = RewardCfg()
     normalization: NormalizationCfg = NormalizationCfg(
@@ -181,3 +181,6 @@ class BaseAgentCfg(RslRlOnPolicyRunnerCfg):
     resume = False
     load_run = ".*"
     load_checkpoint = "model_.*.pt"
+
+    def __post_init__(self):
+        pass

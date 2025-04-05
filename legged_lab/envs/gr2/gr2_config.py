@@ -63,6 +63,8 @@ class GR2RoughEnvCfg(GR2FlatEnvCfg):
         super().__post_init__()
         self.scene.height_scanner.enable_height_scan = True
         self.scene.terrain_generator = ROUGH_TERRAINS_CFG
+        self.robot.actor_obs_history_length = 1
+        self.robot.critic_obs_history_length = 1
         self.reward.track_lin_vel_xy_exp.weight = 1.5
         self.reward.track_ang_vel_z_exp.weight = 1.5
         self.reward.lin_vel_z_l2.weight = -0.25
@@ -72,3 +74,12 @@ class GR2RoughEnvCfg(GR2FlatEnvCfg):
 class GR2RoughAgentCfg(BaseAgentCfg):
     experiment_name: str = "gr2_rough"
     wandb_project: str = "gr2_rough"
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.policy.class_name = "ActorCriticRecurrent"
+        self.policy.actor_hidden_dims = [256, 256, 128]
+        self.policy.critic_hidden_dims = [256, 256, 128]
+        self.policy.rnn_hidden_size = 256
+        self.policy.rnn_num_layers = 1
+        self.policy.rnn_type = "lstm"

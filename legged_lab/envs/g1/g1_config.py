@@ -65,6 +65,8 @@ class G1RoughEnvCfg(G1FlatEnvCfg):
         super().__post_init__()
         self.scene.height_scanner.enable_height_scan = True
         self.scene.terrain_generator = ROUGH_TERRAINS_CFG
+        self.robot.actor_obs_history_length = 1
+        self.robot.critic_obs_history_length = 1
         self.reward.feet_air_time.weight = 0.25
         self.reward.track_lin_vel_xy_exp_relax = RewTerm(func=mdp.track_lin_vel_xy_yaw_frame_exp, weight=1.0, params={"std": 0.7})
         self.reward.track_lin_vel_xy_exp.weight = 0.5
@@ -76,3 +78,12 @@ class G1RoughEnvCfg(G1FlatEnvCfg):
 class G1RoughAgentCfg(BaseAgentCfg):
     experiment_name: str = "g1_rough"
     wandb_project: str = "g1_rough"
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.policy.class_name = "ActorCriticRecurrent"
+        self.policy.actor_hidden_dims = [256, 256, 128]
+        self.policy.critic_hidden_dims = [256, 256, 128]
+        self.policy.rnn_hidden_size = 256
+        self.policy.rnn_num_layers = 1
+        self.policy.rnn_type = "lstm"

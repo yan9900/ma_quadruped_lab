@@ -43,9 +43,11 @@ def train():
     env_class_name = args_cli.task
     env_cfg, agent_cfg = task_registry.get_cfgs(env_class_name)
     env_class = task_registry.get_task_class(env_class_name)
-    agent_cfg = update_rsl_rl_cfg(agent_cfg, args_cli)
+
     if args_cli.num_envs is not None:
         env_cfg.scene.num_envs = args_cli.num_envs
+
+    agent_cfg = update_rsl_rl_cfg(agent_cfg, args_cli)
     env_cfg.scene.seed = agent_cfg.seed
 
     if args_cli.distributed:

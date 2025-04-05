@@ -11,35 +11,6 @@ from isaaclab.utils import configclass
 
 
 @configclass
-class AnymalDSceneCfg(BaseSceneCfg):
-    height_scanner: HeightScannerCfg = HeightScannerCfg(
-        enable_height_scan=False,
-        prim_body_name="base"
-    )
-    robot: str = ANYMAL_D_CFG
-    terrain_type: str = "generator"
-    terrain_generator: str = GRAVEL_TERRAINS_CFG
-
-
-@configclass
-class AnymalDRobotCfg(RobotCfg):
-    terminate_contacts_body_names: list = [".*base.*"]
-    feet_body_names: list = [".*FOOT.*"]
-
-
-@configclass
-class AnymalDDomainRandCfg(DomainRandCfg):
-    add_rigid_body_mass: AddRigidBodyMassCfg = AddRigidBodyMassCfg(
-        enable=True,
-        params={
-            "body_names": [".*base.*"],
-            "mass_distribution_params": (-3.0, 3.0),
-            "operation": "add"
-        }
-    )
-
-
-@configclass
 class AnymalDRewardCfg(RewardCfg):
     track_lin_vel_xy_exp = RewTerm(func=mdp.track_lin_vel_xy_yaw_frame_exp, weight=1.0, params={"std": 0.5})
     track_ang_vel_z_exp = RewTerm(func=mdp.track_ang_vel_z_world_exp, weight=1.0, params={"std": 0.5})
@@ -88,6 +59,8 @@ class AnymalDRoughEnvCfg(AnymalDFlatEnvCfg):
         super().__post_init__()
         self.scene.height_scanner.enable_height_scan = True
         self.scene.terrain_generator = ROUGH_TERRAINS_CFG
+        self.robot.actor_obs_history_length = 1
+        self.robot.critic_obs_history_length = 1
         self.reward.track_lin_vel_xy_exp.weight = 1.5
         self.reward.track_ang_vel_z_exp.weight = 1.5
         self.reward.lin_vel_z_l2.weight = -0.25
@@ -97,3 +70,12 @@ class AnymalDRoughEnvCfg(AnymalDFlatEnvCfg):
 class AnymalDRoughAgentCfg(BaseAgentCfg):
     experiment_name: str = "anymal_d_rough"
     wandb_project: str = "anymal_d_rough"
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.policy.class_name = "ActorCriticRecurrent"
+        self.policy.actor_hidden_dims = [256, 256, 128]
+        self.policy.critic_hidden_dims = [256, 256, 128]
+        self.policy.rnn_hidden_size = 256
+        self.policy.rnn_num_layers = 1
+        self.policy.rnn_type = "lstm"
