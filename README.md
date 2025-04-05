@@ -68,7 +68,12 @@ python legged_lab/scripts/train.py --task=h1_flat --headless --logger=tensorboar
 
 ## Use Your Own Robot
 
-Assets must be converted into USD format to be compatible with Legged Lab/IsaacLab, [Convert Tutorial](https://isaac-sim.github.io/IsaacLab/main/source/how-to/import_new_asset.html).
+Assets must be converted into USD format to be compatible with Legged Lab/IsaacLab. [Convert Tutorial](https://isaac-sim.github.io/IsaacLab/main/source/how-to/import_new_asset.html).
+
+
+## Multi-GPU and Multi-Node Training
+
+Legged Lab supports multi-GPU and multi-node reinforcement learning using rsl_rl, the usage is exactly the same as IsaacLab. [Detailed information](https://isaac-sim.github.io/IsaacLab/main/source/features/multi_gpu.html)
 
 ## Troubleshooting
 
