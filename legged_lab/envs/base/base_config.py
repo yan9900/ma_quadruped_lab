@@ -22,7 +22,6 @@ class HeightScannerCfg:
 
 @configclass
 class BaseSceneCfg:
-    seed: int = 42
     max_episode_length_s: float = 20.0
     num_envs: int = 4096
     env_spacing: float = 2.5
@@ -175,41 +174,3 @@ class SimCfg:
     dt: float = 0.005
     decimation: int = 4
     physx: PhysxCfg = PhysxCfg()
-
-
-@configclass
-class MLPPolicyCfg:
-    class_name: str = "ActorCritic"
-    init_noise_std: float = 1.0
-    actor_hidden_dims: list = [512, 256, 128]
-    critic_hidden_dims: list = [512, 256, 128]
-    activation: str = "elu"
-
-
-@configclass
-class RNNPolicyCfg:
-    class_name: str = "ActorCriticRecurrent"
-    init_noise_std: float = 1.0
-    actor_hidden_dims: list = [256, 256, 128]
-    critic_hidden_dims: list = [256, 256, 128]
-    activation: str = "elu"
-    rnn_hidden_size: int = 256
-    rnn_num_layers: int = 1
-    rnn_type: str = "lstm"
-
-
-@configclass
-class AlgorithmCfg:
-    class_name: str = "PPO"
-    value_loss_coef: float = 1.0
-    use_clipped_value_loss: bool = True
-    clip_param: float = 0.2
-    entropy_coef: float = 0.005
-    num_learning_epochs: int = 5
-    num_mini_batches: int = 4
-    learning_rate: float = 1.0e-3
-    schedule: str = "adaptive"
-    gamma: float = 0.99
-    lam: float = 0.95
-    desired_kl: float = 0.01
-    max_grad_norm: float = 1.0

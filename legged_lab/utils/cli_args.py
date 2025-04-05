@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 from typing import TYPE_CHECKING
-
+import random
 if TYPE_CHECKING:
     from legged_lab.envs.base.base_env_config import BaseAgentConfig
 
@@ -27,11 +27,18 @@ def add_rsl_rl_args(parser: argparse.ArgumentParser):
     arg_group.add_argument(
         "--log_project_name", type=str, default=None, help="Name of the logging project when using wandb or neptune."
     )
+    arg_group.add_argument(
+        "--distributed", action="store_true", default=False, help="Run training with multiple GPUs or nodes."
+    )
 
 
 def update_rsl_rl_cfg(agent_cfg: BaseAgentConfig, args_cli: argparse.Namespace):
 
     # override the default configuration with CLI arguments
+    if args_cli.seed is not None:
+        if args_cli.seed == -1:
+            args_cli.seed = random.randint(0, 10000)
+        agent_cfg.seed = args_cli.seed
     if args_cli.max_iterations is not None:
         agent_cfg.max_iterations = args_cli.max_iterations
     if args_cli.experiment_name is not None:

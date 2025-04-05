@@ -1,6 +1,6 @@
 from legged_lab.envs.base.base_env_config import (  # noqa:F401
     BaseEnvCfg, BaseAgentCfg, BaseSceneCfg, RobotCfg, DomainRandCfg,
-    RewardCfg, HeightScannerCfg, AddRigidBodyMassCfg, PhysxCfg, SimCfg, MLPPolicyCfg, RNNPolicyCfg
+    RewardCfg, HeightScannerCfg, AddRigidBodyMassCfg, PhysxCfg, SimCfg
 )
 from legged_lab.assets.anybotics import ANYMAL_D_CFG
 from legged_lab.terrains import GRAVEL_TERRAINS_CFG, ROUGH_TERRAINS_CFG
@@ -88,8 +88,6 @@ class AnymalDRoughEnvCfg(AnymalDFlatEnvCfg):
         super().__post_init__()
         self.scene.height_scanner.enable_height_scan = True
         self.scene.terrain_generator = ROUGH_TERRAINS_CFG
-        self.robot.actor_obs_history_length = 1
-        self.robot.critic_obs_history_length = 1
         self.reward.track_lin_vel_xy_exp.weight = 1.5
         self.reward.track_ang_vel_z_exp.weight = 1.5
         self.reward.lin_vel_z_l2.weight = -0.25
@@ -99,4 +97,3 @@ class AnymalDRoughEnvCfg(AnymalDFlatEnvCfg):
 class AnymalDRoughAgentCfg(BaseAgentCfg):
     experiment_name: str = "anymal_d_rough"
     wandb_project: str = "anymal_d_rough"
-    policy = RNNPolicyCfg()

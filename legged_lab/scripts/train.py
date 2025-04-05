@@ -11,7 +11,7 @@ import legged_lab.utils.cli_args as cli_args  # isort: skip
 parser = argparse.ArgumentParser(description="Train an RL agent with RSL-RL.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
-parser.add_argument("--seed", type=int, default=42, help="Seed used for the environment")
+parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
@@ -43,13 +43,22 @@ def train():
     env_class_name = args_cli.task
     env_cfg, agent_cfg = task_registry.get_cfgs(env_class_name)
     env_class = task_registry.get_task_class(env_class_name)
+    agent_cfg = update_rsl_rl_cfg(agent_cfg, args_cli)
     if args_cli.num_envs is not None:
         env_cfg.scene.num_envs = args_cli.num_envs
-    if args_cli.seed is not None:
-        env_cfg.scene.seed = args_cli.seed
+    env_cfg.scene.seed = agent_cfg.seed
+
+    if args_cli.distributed:
+        env_cfg.sim.device = f"cuda:{app_launcher.local_rank}"
+        agent_cfg.device = f"cuda:{app_launcher.local_rank}"
+
+        # set seed to have diversity in different threads
+        seed = agent_cfg.seed + app_launcher.local_rank
+        env_cfg.scene.seed = seed
+        agent_cfg.seed = seed
+
     env = env_class(env_cfg, args_cli.headless)
 
-    agent_cfg = update_rsl_rl_cfg(agent_cfg, args_cli)
     log_root_path = os.path.join("logs", agent_cfg.experiment_name)
     log_root_path = os.path.abspath(log_root_path)
     print(f"[INFO] Logging experiment in directory: {log_root_path}")

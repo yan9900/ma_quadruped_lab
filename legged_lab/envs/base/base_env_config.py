@@ -4,14 +4,15 @@ from isaaclab.utils import configclass
 from .base_config import BaseSceneCfg, HeightScannerCfg, RobotCfg, RewardCfg, \
     NormalizationCfg, ObsScalesCfg, CommandsCfg, CommandRangesCfg, NoiseCfg, NoiseScalesCfg, \
     DomainRandCfg, ResetRobotJointsCfg, ResetRobotBaseCfg, RandomizeRobotFrictionCfg, AddRigidBodyMassCfg, \
-    PushRobotCfg, ActionDelayCfg, SimCfg, MLPPolicyCfg, RNNPolicyCfg, AlgorithmCfg, PhysxCfg
+    PushRobotCfg, ActionDelayCfg, SimCfg, PhysxCfg
+
+from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg, RslRlRndCfg, RslRlSymmetryCfg  # noqa:F401
 
 
 @configclass
 class BaseEnvCfg:
     device: str = "cuda:0"
     scene: BaseSceneCfg = BaseSceneCfg(
-        seed=42,
         max_episode_length_s=20.0,
         num_envs=4096,
         env_spacing=2.5,
@@ -138,27 +139,21 @@ class BaseEnvCfg:
 
 
 @configclass
-class BaseAgentCfg:
-    resume: bool = False
-    num_steps_per_env: int = 24
-    max_iterations: int = 50000
-    save_interval: int = 100
-    experiment_name: str = MISSING
-    empirical_normalization: bool = False
-    device: str = "cuda:0"
-    run_name: str = ""
-    logger: str = "wandb"
-    wandb_project: str = MISSING
-    load_run: str = ".*"
-    load_checkpoint: str = "model_.*.pt"
-    policy: MLPPolicyCfg | RNNPolicyCfg = MLPPolicyCfg(
+class BaseAgentCfg(RslRlOnPolicyRunnerCfg):
+    seed = 42
+    device = "cuda:0"
+    num_steps_per_env = 24
+    max_iterations = 50000
+    empirical_normalization = False
+    policy = RslRlPpoActorCriticCfg(
         class_name="ActorCritic",
-        init_noise_std=1.0,
+        init_noise_std=0.1,
+        noise_std_type="scalar",
         actor_hidden_dims=[512, 256, 128],
         critic_hidden_dims=[512, 256, 128],
-        activation="elu"
+        activation="elu",
     )
-    algorithm: AlgorithmCfg = AlgorithmCfg(
+    algorithm = RslRlPpoAlgorithmCfg(
         class_name="PPO",
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
@@ -172,7 +167,17 @@ class BaseAgentCfg:
         lam=0.95,
         desired_kl=0.01,
         max_grad_norm=1.0,
+        normalize_advantage_per_mini_batch=False,
+        symmetry_cfg=None,  # RslRlSymmetryCfg()
+        rnd_cfg=None,  # RslRlRndCfg()
     )
-
-    def __post_init__(self):
-        pass
+    clip_actions = None
+    save_interval = 100
+    experiment_name = ""
+    run_name = ""
+    logger = "wandb"
+    neptune_project = "leggedlab"
+    wandb_project = "leggedlab"
+    resume = False
+    load_run = ".*"
+    load_checkpoint = "model_.*.pt"
