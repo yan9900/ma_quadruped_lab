@@ -6,8 +6,8 @@
 [![Python](https://img.shields.io/badge/python-3.10-blue.svg)](https://docs.python.org/3/whatsnew/3.10.html)
 [![Linux platform](https://img.shields.io/badge/platform-linux--64-orange.svg)](https://releases.ubuntu.com/22.04/)
 [![Windows platform](https://img.shields.io/badge/platform-windows--64-orange.svg)](https://www.microsoft.com/en-us/)
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg)](https://opensource.org/license/mit)
+<!-- [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/) -->
 
 ## Overview
 
@@ -25,18 +25,7 @@ Deploy Code: https://github.com/Hellod035/unitree_deploy_py
 - `Isolation` Work outside the core Isaac Lab repository, ensuring that the development efforts remain self-contained.
 - `Long-term support` This repository will be updated with the updates of isaac sim and isaac lab, and will be supported for a long time.
 
-If you use Legged Lab in your research, please cite it as follows:
 
-```bibtex
-@software{LeggedLab,
-  author = {Wandong, Sun},
-  license = {MIT},
-  title = {Legged Lab: Direct IsaacLab Workflow for Legged Robots},
-  url = {https://github.com/Hellod035/LeggedLab},
-  version = {0.0.1},
-  year = {2025}
-}
-```
 
 ## Installation
 
@@ -97,8 +86,23 @@ In some VsCode versions, the indexing of part of the extensions is missing. In t
 }
 ```
 
-# References and Thanks
+## References and Thanks
 This project repository builds upon the shoulders of giants. 
 * [IsaacLab](https://github.com/isaac-sim/IsaacLab)   The various reusable practical components in IsaacLab greatly simplify the complexity of LeggedLab.
 * [legged_gym](https://github.com/leggedrobotics/legged_gym)   We borrowed the code organization and environment definition logic of legged_gym and simplified it as much as possible.
 * [Protomotions](https://github.com/NVlabs/ProtoMotions)   The motivation for building this repository comes from protomotions. For the first time, we realized that we could create our own environment using only IsaacLab components without inheriting 'DirectRLEnv' or 'ManagerBasedRLEnv'.
+
+## Citation
+
+If you use Legged Lab in your research, you can cite it as follows:
+
+```bibtex
+@software{LeggedLab,
+  author = {Wandong, Sun},
+  license = {MIT},
+  title = {Legged Lab: Direct IsaacLab Workflow for Legged Robots},
+  url = {https://github.com/Hellod035/LeggedLab},
+  version = {0.0.1},
+  year = {2025}
+}
+```
