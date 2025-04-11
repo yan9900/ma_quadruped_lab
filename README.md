@@ -14,7 +14,7 @@
 This repository provides a direct workflow for training a legged robot using IsaacLab. It provides high transparency and low refactoring difficulty of the direct environment, and uses isaaclab components to simplify the workflow.
 
 It has all the necessary conditions for sim-to-real and has been tested on real unitree g1 and h1 robots, [video available](https://www.bilibili.com/video/BV1tNRgYQEnr/).
-Deploy Code: https://github.com/Hellod035/unitree_deploy_py
+Deploy Code: https://github.com/Hellod035/LeggedLabDeploy
 
 **Maintainer**: Wandong Sun              
 **Contact**: 24b908020@stu.hit.edu.cn    
