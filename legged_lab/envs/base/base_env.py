@@ -10,8 +10,7 @@ import numpy as np
 from isaaclab.managers.scene_entity_cfg import SceneEntityCfg
 from isaaclab.sensors import ContactSensor, RayCaster
 from isaaclab.envs.mdp.commands import UniformVelocityCommand, UniformVelocityCommandCfg
-from isaaclab.envs.mdp.events import randomize_rigid_body_material, randomize_rigid_body_mass, reset_joints_by_scale, reset_root_state_uniform, push_by_setting_velocity
-from isaaclab.managers import RewardManager
+from isaaclab.managers import RewardManager, EventManager
 from isaaclab.utils.buffers import CircularBuffer, DelayBuffer
 import isaacsim.core.utils.torch as torch_utils  # type: ignore
 
@@ -69,7 +68,9 @@ class BaseEnv(VecEnv):
         self.init_buffers()
 
         env_ids = torch.arange(self.num_envs, device=self.device)
-        self.apply_domain_random_at_start(env_ids)
+        self.event_manager = EventManager(self.cfg.domain_rand.events, self)
+        if "startup" in self.event_manager.available_modes:
+            self.event_manager.apply(mode="startup")
         self.reset(env_ids)
 
     def init_buffers(self):
@@ -99,6 +100,7 @@ class BaseEnv(VecEnv):
         self.add_noise = self.cfg.noise.add_noise
 
         self.episode_length_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.long)
+        self.sim_step_counter = 0
         self.time_out_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
         self.init_obs_buffer()
 
@@ -165,8 +167,8 @@ class BaseEnv(VecEnv):
                 self.extras["log"].update(terrain_levels)
 
         self.scene.reset(env_ids)
-        reset_joints_by_scale(env=self, env_ids=env_ids, position_range=self.cfg.domain_rand.reset_robot_joints.params["position_range"], velocity_range=self.cfg.domain_rand.reset_robot_joints.params["velocity_range"], asset_cfg=self.robot_cfg)
-        reset_root_state_uniform(env=self, env_ids=env_ids, pose_range=self.cfg.domain_rand.reset_robot_base.params["pose_range"], velocity_range=self.cfg.domain_rand.reset_robot_base.params["velocity_range"], asset_cfg=self.robot_cfg)
+        if "reset" in self.event_manager.available_modes:
+            self.event_manager.apply(mode="reset", env_ids=env_ids, dt=self.step_dt, global_env_step_count=self.sim_step_counter // self.cfg.sim.decimation)
 
         reward_extras = self.reward_manager.reset(env_ids)
         self.extras['log'].update(reward_extras)
@@ -189,6 +191,7 @@ class BaseEnv(VecEnv):
         processed_actions = cliped_actions * self.action_scale + self.robot.data.default_joint_pos
 
         for _ in range(self.cfg.sim.decimation):
+            self.sim_step_counter += 1
             self.robot.set_joint_position_target(processed_actions)
             self.scene.write_data_to_sim()
             self.sim.step(render=False)
@@ -198,7 +201,8 @@ class BaseEnv(VecEnv):
             self.sim.render()
 
         self.episode_length_buf += 1
-        self.post_step_callback()
+        if "interval" in self.event_manager.available_modes:
+            self.event_manager.apply(mode="interval", dt=self.step_dt)
 
         self.reset_buf, self.time_out_buf = self.check_reset()
         reward_buf = self.reward_manager.compute(self.step_dt)
@@ -210,13 +214,6 @@ class BaseEnv(VecEnv):
 
         return actor_obs, reward_buf, self.reset_buf, self.extras
 
-    def post_step_callback(self):
-        self.command_generator.compute(self.step_dt)
-        if self.cfg.domain_rand.push_robot.enable:
-            env_ids = (self.episode_length_buf % int(self.cfg.domain_rand.push_robot.push_interval_s / self.step_dt) == 0).nonzero(as_tuple=False).flatten()
-            if len(env_ids) != 0:
-                push_by_setting_velocity(env=self, env_ids=env_ids, velocity_range=self.cfg.domain_rand.push_robot.params["velocity_range"], asset_cfg=self.robot_cfg,)
-
     def check_reset(self):
         net_contact_forces = self.contact_sensor.data.net_forces_w_history
 
@@ -224,31 +221,6 @@ class BaseEnv(VecEnv):
         time_out_buf = self.episode_length_buf >= self.max_episode_length
         reset_buf |= time_out_buf
         return reset_buf, time_out_buf
-
-    def apply_domain_random_at_start(self, env_ids):
-        if self.cfg.domain_rand.randomize_robot_friction.enable:
-            self.cfg.domain_rand.randomize_robot_friction.params["asset_cfg"] = (self.robot_cfg)
-            rand_rb_material = randomize_rigid_body_material(self.cfg.domain_rand.randomize_robot_friction, self)
-            rand_rb_material(
-                env=self,
-                env_ids=env_ids,
-                static_friction_range=self.cfg.domain_rand.randomize_robot_friction.params["static_friction_range"],
-                dynamic_friction_range=self.cfg.domain_rand.randomize_robot_friction.params["dynamic_friction_range"],
-                restitution_range=self.cfg.domain_rand.randomize_robot_friction.params["restitution_range"],
-                num_buckets=self.cfg.domain_rand.randomize_robot_friction.params["num_buckets"],
-                asset_cfg=self.robot_cfg
-            )
-
-        if self.cfg.domain_rand.add_rigid_body_mass.enable:
-            robot_cfg = SceneEntityCfg(name="robot", body_names=self.cfg.domain_rand.add_rigid_body_mass.params["body_names"])
-            robot_cfg.resolve(self.scene)
-            randomize_rigid_body_mass(
-                env=self,
-                env_ids=env_ids,
-                asset_cfg=robot_cfg,
-                mass_distribution_params=self.cfg.domain_rand.add_rigid_body_mass.params["mass_distribution_params"],
-                operation=self.cfg.domain_rand.add_rigid_body_mass.params["operation"],
-            )
 
     def init_obs_buffer(self):
         if self.add_noise:

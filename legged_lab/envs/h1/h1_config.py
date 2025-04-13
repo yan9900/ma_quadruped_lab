@@ -1,6 +1,6 @@
 from legged_lab.envs.base.base_env_config import (  # noqa:F401
     BaseEnvCfg, BaseAgentCfg, BaseSceneCfg, RobotCfg, DomainRandCfg,
-    RewardCfg, HeightScannerCfg, AddRigidBodyMassCfg, PhysxCfg, SimCfg
+    RewardCfg, HeightScannerCfg, PhysxCfg, SimCfg
 )
 from legged_lab.assets.unitree import H1_CFG
 from legged_lab.terrains import GRAVEL_TERRAINS_CFG, ROUGH_TERRAINS_CFG
@@ -47,7 +47,7 @@ class H1FlatEnvCfg(BaseEnvCfg):
         self.scene.terrain_generator = GRAVEL_TERRAINS_CFG
         self.robot.terminate_contacts_body_names = [".*torso.*"]
         self.robot.feet_body_names = [".*ankle.*"]
-        self.domain_rand.add_rigid_body_mass.params["body_names"] = [".*torso.*"]
+        self.domain_rand.events.add_base_mass.params["asset_cfg"].body_names = [".*torso.*"]
 
 
 @configclass

@@ -1,6 +1,6 @@
 from legged_lab.envs.base.base_env_config import (  # noqa:F401
     BaseEnvCfg, BaseAgentCfg, BaseSceneCfg, RobotCfg, DomainRandCfg,
-    RewardCfg, HeightScannerCfg, AddRigidBodyMassCfg, PhysxCfg, SimCfg
+    RewardCfg, HeightScannerCfg, PhysxCfg, SimCfg
 )
 from legged_lab.assets.unitree import G1_CFG
 from legged_lab.terrains import GRAVEL_TERRAINS_CFG, ROUGH_TERRAINS_CFG
@@ -49,7 +49,7 @@ class G1FlatEnvCfg(BaseEnvCfg):
         self.scene.terrain_generator = GRAVEL_TERRAINS_CFG
         self.robot.terminate_contacts_body_names = [".*torso.*"]
         self.robot.feet_body_names = [".*ankle_roll.*"]
-        self.domain_rand.add_rigid_body_mass.params["body_names"] = [".*torso.*"]
+        self.domain_rand.events.add_base_mass.params["asset_cfg"].body_names = [".*torso.*"]
 
 
 @configclass
@@ -68,8 +68,7 @@ class G1RoughEnvCfg(G1FlatEnvCfg):
         self.robot.actor_obs_history_length = 1
         self.robot.critic_obs_history_length = 1
         self.reward.feet_air_time.weight = 0.25
-        self.reward.track_lin_vel_xy_exp_relax = RewTerm(func=mdp.track_lin_vel_xy_yaw_frame_exp, weight=1.0, params={"std": 0.7})
-        self.reward.track_lin_vel_xy_exp.weight = 0.5
+        self.reward.track_lin_vel_xy_exp.weight = 1.5
         self.reward.track_ang_vel_z_exp.weight = 1.5
         self.reward.lin_vel_z_l2.weight = -0.25
 

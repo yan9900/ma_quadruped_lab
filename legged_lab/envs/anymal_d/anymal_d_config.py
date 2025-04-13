@@ -1,6 +1,6 @@
 from legged_lab.envs.base.base_env_config import (  # noqa:F401
     BaseEnvCfg, BaseAgentCfg, BaseSceneCfg, RobotCfg, DomainRandCfg,
-    RewardCfg, HeightScannerCfg, AddRigidBodyMassCfg, PhysxCfg, SimCfg
+    RewardCfg, HeightScannerCfg, PhysxCfg, SimCfg
 )
 from legged_lab.assets.anybotics import ANYMAL_D_CFG
 from legged_lab.terrains import GRAVEL_TERRAINS_CFG, ROUGH_TERRAINS_CFG
@@ -43,7 +43,7 @@ class AnymalDFlatEnvCfg(BaseEnvCfg):
         self.scene.terrain_generator = GRAVEL_TERRAINS_CFG
         self.robot.terminate_contacts_body_names = [".*base.*"]
         self.robot.feet_body_names = [".*FOOT.*"]
-        self.domain_rand.add_rigid_body_mass.params["body_names"] = [".*base.*"]
+        self.domain_rand.events.add_base_mass.params["asset_cfg"].body_names = [".*base.*"]
 
 
 @configclass

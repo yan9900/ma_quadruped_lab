@@ -40,7 +40,7 @@ def play():
     env_cfg, agent_cfg = task_registry.get_cfgs(env_class_name)
 
     env_cfg.noise.add_noise = False
-    env_cfg.domain_rand.push_robot.enable = False
+    env_cfg.domain_rand.events.push_robot = None
     env_cfg.scene.max_episode_length_s = 40.
     env_cfg.scene.num_envs = 50
     env_cfg.scene.env_spacing = 2.5

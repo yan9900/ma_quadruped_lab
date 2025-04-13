@@ -1,10 +1,12 @@
 from dataclasses import MISSING
 import math
 from isaaclab.utils import configclass
+from isaaclab.managers import EventTermCfg as EventTerm
+from isaaclab.managers import SceneEntityCfg
+import legged_lab.mdp as mdp
 from .base_config import BaseSceneCfg, HeightScannerCfg, RobotCfg, RewardCfg, \
     NormalizationCfg, ObsScalesCfg, CommandsCfg, CommandRangesCfg, NoiseCfg, NoiseScalesCfg, \
-    DomainRandCfg, ResetRobotJointsCfg, ResetRobotBaseCfg, RandomizeRobotFrictionCfg, AddRigidBodyMassCfg, \
-    PushRobotCfg, ActionDelayCfg, SimCfg, PhysxCfg
+    DomainRandCfg, EventCfg, ActionDelayCfg, SimCfg, PhysxCfg
 
 from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg, RslRlRndCfg, RslRlSymmetryCfg  # noqa:F401
 
@@ -78,47 +80,56 @@ class BaseEnvCfg:
         )
     )
     domain_rand: DomainRandCfg = DomainRandCfg(
-        reset_robot_joints=ResetRobotJointsCfg(
-            params={"position_range": (0.5, 1.5), "velocity_range": (0.0, 0.0)}
-        ),
-        reset_robot_base=ResetRobotBaseCfg(
-            params={
-                "pose_range": {
-                    "x": (-0.5, 0.5),
-                    "y": (-0.5, 0.5),
-                    "yaw": (-3.14, 3.14),
+        events=EventCfg(
+            physics_material=EventTerm(
+                func=mdp.randomize_rigid_body_material,
+                mode="startup",
+                params={
+                    "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
+                    "static_friction_range": (0.6, 1.0),
+                    "dynamic_friction_range": (0.4, 0.8),
+                    "restitution_range": (0.0, 0.005),
+                    "num_buckets": 64,
                 },
-                "velocity_range": {
-                    "x": (-0.5, 0.5),
-                    "y": (-0.5, 0.5),
-                    "z": (-0.5, 0.5),
-                    "roll": (-0.5, 0.5),
-                    "pitch": (-0.5, 0.5),
-                    "yaw": (-0.5, 0.5),
+            ),
+            add_base_mass=EventTerm(
+                func=mdp.randomize_rigid_body_mass,
+                mode="startup",
+                params={
+                    "asset_cfg": SceneEntityCfg("robot", body_names=MISSING),
+                    "mass_distribution_params": (-5.0, 5.0),
+                    "operation": "add",
                 },
-            }
-        ),
-        randomize_robot_friction=RandomizeRobotFrictionCfg(
-            enable=True,
-            params={
-                "static_friction_range": [0.6, 1.0],
-                "dynamic_friction_range": [0.4, 0.8],
-                "restitution_range": [0.0, 0.005],
-                "num_buckets": 64,
-            }
-        ),
-        add_rigid_body_mass=AddRigidBodyMassCfg(
-            enable=True,
-            params={
-                "body_names": MISSING,
-                "mass_distribution_params": (-5.0, 5.0),
-                "operation": "add",
-            }
-        ),
-        push_robot=PushRobotCfg(
-            enable=True,
-            push_interval_s=15.0,
-            params={"velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0)}}
+            ),
+            reset_base=EventTerm(
+                func=mdp.reset_root_state_uniform,
+                mode="reset",
+                params={
+                    "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
+                    "velocity_range": {
+                        "x": (-0.5, 0.5),
+                        "y": (-0.5, 0.5),
+                        "z": (-0.5, 0.5),
+                        "roll": (-0.5, 0.5),
+                        "pitch": (-0.5, 0.5),
+                        "yaw": (-0.5, 0.5),
+                    },
+                },
+            ),
+            reset_robot_joints=EventTerm(
+                func=mdp.reset_joints_by_scale,
+                mode="reset",
+                params={
+                    "position_range": (0.5, 1.5),
+                    "velocity_range": (0.0, 0.0),
+                },
+            ),
+            push_robot=EventTerm(
+                func=mdp.push_by_setting_velocity,
+                mode="interval",
+                interval_range_s=(10.0, 15.0),
+                params={"velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0)}},
+            )
 
         ),
         action_delay=ActionDelayCfg(
