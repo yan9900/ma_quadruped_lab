@@ -70,7 +70,6 @@ class BaseEnvCfg:
     )
     noise: NoiseCfg = NoiseCfg(
         add_noise=True,
-        noise_level=1.0,
         noise_scales=NoiseScalesCfg(
             ang_vel=0.2,
             projected_gravity=0.05,

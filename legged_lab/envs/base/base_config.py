@@ -95,7 +95,6 @@ class NoiseScalesCfg:
 @configclass
 class NoiseCfg:
     add_noise: bool = True
-    noise_level: float = 1.0
     noise_scales: NoiseScalesCfg = NoiseScalesCfg()
 
 
@@ -121,7 +120,6 @@ class EventCfg:
             "operation": "add",
         },
     )
-
     reset_base = EventTerm(
         func=mdp.reset_root_state_uniform,
         mode="reset",
@@ -137,7 +135,6 @@ class EventCfg:
             },
         },
     )
-
     reset_robot_joints = EventTerm(
         func=mdp.reset_joints_by_scale,
         mode="reset",
@@ -146,7 +143,6 @@ class EventCfg:
             "velocity_range": (0.0, 0.0),
         },
     )
-
     push_robot = EventTerm(
         func=mdp.push_by_setting_velocity,
         mode="interval",
