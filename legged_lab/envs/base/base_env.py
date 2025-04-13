@@ -16,11 +16,11 @@ import isaacsim.core.utils.torch as torch_utils  # type: ignore
 
 
 class BaseEnv(VecEnv):
-    def __init__(self, cfg: BaseEnvCfg, hedless):
+    def __init__(self, cfg: BaseEnvCfg, headless):
         self.cfg: BaseEnvCfg
 
         self.cfg = cfg
-        self.hedless = hedless
+        self.headless = headless
         self.device = self.cfg.device
         self.physics_dt = self.cfg.sim.dt
         self.step_dt = self.cfg.sim.decimation * self.cfg.sim.dt
@@ -197,7 +197,7 @@ class BaseEnv(VecEnv):
             self.sim.step(render=False)
             self.scene.update(dt=self.physics_dt)
 
-        if not self.hedless:
+        if not self.headless:
             self.sim.render()
 
         self.episode_length_buf += 1
