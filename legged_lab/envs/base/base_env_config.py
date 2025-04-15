@@ -28,7 +28,7 @@ class BaseEnvCfg:
             resolution=0.1,
             size=(1.6, 1.0),
             debug_vis=False,
-            drift_range=(-0.3, 0.3)
+            drift_range=(0.0, 0.0)  # (0.3, 0.3)
         )
     )
     robot: RobotCfg = RobotCfg(
