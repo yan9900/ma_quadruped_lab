@@ -248,7 +248,7 @@ G1_CFG = ArticulationCfg(
             },
             stiffness=50.0,
             damping=2.0,
-            armature=0.1,
+            armature=0.01,
         ),
         "wrist": ImplicitActuatorCfg(
             joint_names_expr=[

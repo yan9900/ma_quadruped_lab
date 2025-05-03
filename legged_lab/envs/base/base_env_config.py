@@ -64,7 +64,7 @@ class BaseEnvCfg:
         ranges=CommandRangesCfg(
             lin_vel_x=(-0.6, 1.0),
             lin_vel_y=(-0.5, 0.5),
-            ang_vel_z=(-1.0, 1.0),
+            ang_vel_z=(-1.57, 1.57),
             heading=(-math.pi, math.pi)
         ),
     )
