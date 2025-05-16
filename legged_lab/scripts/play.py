@@ -1,11 +1,23 @@
-import os
-import torch
-from legged_lab.utils import task_registry
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# All rights reserved.
+# Original code is licensed under BSD-3-Clause.
+#
+# Copyright (c) 2025-2026, The Legged Lab Project Developers.
+# All rights reserved.
+# Modifications are licensed under BSD-3-Clause.
+#
+# This file contains code derived from Isaac Lab Project (BSD-3-Clause license)
+# with modifications by Legged Lab Project (BSD-3-Clause license).
 
 import argparse
+import os
 
+import torch
 from isaaclab.app import AppLauncher
 from rsl_rl.runners import OnPolicyRunner
+
+from legged_lab.utils import task_registry
+
 # local imports
 import legged_lab.utils.cli_args as cli_args  # isort: skip
 
@@ -26,10 +38,10 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 from isaaclab_rl.rsl_rl import export_policy_as_jit, export_policy_as_onnx
+from isaaclab_tasks.utils import get_checkpoint_path
 
 from legged_lab.envs import *  # noqa:F401, F403
 from legged_lab.utils.cli_args import update_rsl_rl_cfg
-from isaaclab_tasks.utils import get_checkpoint_path
 
 
 def play():
@@ -41,7 +53,7 @@ def play():
 
     env_cfg.noise.add_noise = False
     env_cfg.domain_rand.events.push_robot = None
-    env_cfg.scene.max_episode_length_s = 40.
+    env_cfg.scene.max_episode_length_s = 40.0
     env_cfg.scene.num_envs = 50
     env_cfg.scene.env_spacing = 2.5
     env_cfg.commands.ranges.lin_vel_x = (0.6, 0.6)
@@ -80,10 +92,13 @@ def play():
 
     export_model_dir = os.path.join(os.path.dirname(resume_path), "exported")
     export_policy_as_jit(runner.alg.policy, runner.obs_normalizer, path=export_model_dir, filename="policy.pt")
-    export_policy_as_onnx(runner.alg.policy, normalizer=runner.obs_normalizer, path=export_model_dir, filename="policy.onnx")
+    export_policy_as_onnx(
+        runner.alg.policy, normalizer=runner.obs_normalizer, path=export_model_dir, filename="policy.onnx"
+    )
 
     if not args_cli.headless:
         from legged_lab.utils.keyboard import Keyboard
+
         keyboard = Keyboard(env)  # noqa:F841
 
     obs, _ = env.get_observations()
@@ -95,6 +110,6 @@ def play():
             obs, _, _, _ = env.step(actions)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     play()
     simulation_app.close()

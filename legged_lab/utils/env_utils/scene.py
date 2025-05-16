@@ -1,13 +1,25 @@
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# All rights reserved.
+# Original code is licensed under BSD-3-Clause.
+#
+# Copyright (c) 2025-2026, The Legged Lab Project Developers.
+# All rights reserved.
+# Modifications are licensed under BSD-3-Clause.
+#
+# This file contains code derived from Isaac Lab Project (BSD-3-Clause license)
+# with modifications by Legged Lab Project (BSD-3-Clause license).
+
+from typing import TYPE_CHECKING
+
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
-from isaaclab.utils import configclass
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import ContactSensorCfg
+from isaaclab.sensors import ContactSensorCfg, patterns
 from isaaclab.terrains.terrain_importer_cfg import TerrainImporterCfg
-from isaaclab.sensors import patterns
+from isaaclab.utils import configclass
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
+
 from legged_lab.terrains.ray_caster_cfg import RayCasterCfg
-from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR, ISAAC_NUCLEUS_DIR
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from legged_lab.envs.base.base_env_config import BaseSceneCfg
@@ -17,12 +29,7 @@ if TYPE_CHECKING:
 class SceneCfg(InteractiveSceneCfg):
     """Configuration for a cart-pole scene."""
 
-    def __init__(
-        self,
-        config: "BaseSceneCfg",
-        physics_dt,
-        step_dt
-    ):
+    def __init__(self, config: "BaseSceneCfg", physics_dt, step_dt):
         super().__init__(num_envs=config.num_envs, env_spacing=config.env_spacing)
 
         self.terrain = TerrainImporterCfg(
@@ -47,7 +54,9 @@ class SceneCfg(InteractiveSceneCfg):
 
         self.robot: ArticulationCfg = config.robot.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
-        self.contact_sensor = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True, update_period=physics_dt)
+        self.contact_sensor = ContactSensorCfg(
+            prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True, update_period=physics_dt
+        )
 
         self.light = AssetBaseCfg(
             prim_path="/World/light",
@@ -57,7 +66,9 @@ class SceneCfg(InteractiveSceneCfg):
             prim_path="/World/skyLight",
             spawn=sim_utils.DomeLightCfg(
                 intensity=750.0,
-                texture_file=f"{ISAAC_NUCLEUS_DIR}/Materials/Textures/Skies/PolyHaven/kloofendal_43d_clear_puresky_4k.hdr",
+                texture_file=(
+                    f"{ISAAC_NUCLEUS_DIR}/Materials/Textures/Skies/PolyHaven/kloofendal_43d_clear_puresky_4k.hdr"
+                ),
             ),
         )
 
@@ -66,9 +77,11 @@ class SceneCfg(InteractiveSceneCfg):
                 prim_path="{ENV_REGEX_NS}/Robot/" + config.height_scanner.prim_body_name,
                 offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
                 attach_yaw_only=True,
-                pattern_cfg=patterns.GridPatternCfg(resolution=config.height_scanner.resolution, size=config.height_scanner.size),
+                pattern_cfg=patterns.GridPatternCfg(
+                    resolution=config.height_scanner.resolution, size=config.height_scanner.size
+                ),
                 debug_vis=config.height_scanner.debug_vis,
                 mesh_prim_paths=["/World/ground"],
                 update_period=step_dt,
-                drift_range=config.height_scanner.drift_range
+                drift_range=config.height_scanner.drift_range,
             )

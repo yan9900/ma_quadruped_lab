@@ -1,10 +1,23 @@
-from dataclasses import MISSING
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# All rights reserved.
+# Original code is licensed under BSD-3-Clause.
+#
+# Copyright (c) 2025-2026, The Legged Lab Project Developers.
+# All rights reserved.
+# Modifications are licensed under BSD-3-Clause.
+#
+# This file contains code derived from Isaac Lab Project (BSD-3-Clause license)
+# with modifications by Legged Lab Project (BSD-3-Clause license).
+
 import math
-from isaaclab.utils import configclass
+from dataclasses import MISSING
+
 from isaaclab.assets.articulation import ArticulationCfg
-from isaaclab.terrains.terrain_generator_cfg import TerrainGeneratorCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.terrains.terrain_generator_cfg import TerrainGeneratorCfg
+from isaaclab.utils import configclass
+
 import legged_lab.mdp as mdp
 
 

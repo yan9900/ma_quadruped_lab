@@ -1,14 +1,20 @@
 # Copyright (c) 2022-2025, The Isaac Lab Project Developers.
 # All rights reserved.
+# Original code is licensed under BSD-3-Clause.
 #
-# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025-2026, The Legged Lab Project Developers.
+# All rights reserved.
+# Modifications are licensed under BSD-3-Clause.
+#
+# This file contains code derived from Isaac Lab Project (BSD-3-Clause license)
+# with modifications by Legged Lab Project (BSD-3-Clause license).
 
 
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
-from legged_lab.assets import ISAAC_ASSET_DIR
 
+from legged_lab.assets import ISAAC_ASSET_DIR
 
 GR2_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(

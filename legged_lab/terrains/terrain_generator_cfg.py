@@ -1,7 +1,14 @@
 # Copyright (c) 2022-2025, The Isaac Lab Project Developers.
 # All rights reserved.
+# Original code is licensed under BSD-3-Clause.
 #
-# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025-2026, The Legged Lab Project Developers.
+# All rights reserved.
+# Modifications are licensed under BSD-3-Clause.
+#
+# This file contains code derived from Isaac Lab Project (BSD-3-Clause license)
+# with modifications by Legged Lab Project (BSD-3-Clause license).
+
 
 """
 Configuration classes defining the different terrains available. Each configuration class must
@@ -14,7 +21,6 @@ inherit from ``isaaclab.terrains.terrains_cfg.TerrainConfig`` and define the fol
 
 import isaaclab.terrains as terrain_gen
 from isaaclab.terrains.terrain_generator_cfg import TerrainGeneratorCfg
-
 
 GRAVEL_TERRAINS_CFG = TerrainGeneratorCfg(
     curriculum=False,
@@ -82,9 +88,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
         "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
             proportion=0.15, noise_range=(-0.02, 0.04), noise_step=0.02, border_width=0.25
         ),
-        "wave": terrain_gen.HfWaveTerrainCfg(
-            proportion=0.15, amplitude_range=(0.0, 0.2), num_waves=5.0
-        ),
+        "wave": terrain_gen.HfWaveTerrainCfg(proportion=0.15, amplitude_range=(0.0, 0.2), num_waves=5.0),
         "high_platform": terrain_gen.MeshPitTerrainCfg(
             proportion=0.15, pit_depth_range=(0.0, 0.3), platform_width=2.0, double_pit=True
         ),

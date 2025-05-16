@@ -1,14 +1,47 @@
-from dataclasses import MISSING
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# All rights reserved.
+# Original code is licensed under BSD-3-Clause.
+#
+# Copyright (c) 2025-2026, The Legged Lab Project Developers.
+# All rights reserved.
+# Modifications are licensed under BSD-3-Clause.
+#
+# This file contains code derived from Isaac Lab Project (BSD-3-Clause license)
+# with modifications by Legged Lab Project (BSD-3-Clause license).
+
 import math
-from isaaclab.utils import configclass
+from dataclasses import MISSING
+
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
-import legged_lab.mdp as mdp
-from .base_config import BaseSceneCfg, HeightScannerCfg, RobotCfg, RewardCfg, \
-    NormalizationCfg, ObsScalesCfg, CommandsCfg, CommandRangesCfg, NoiseCfg, NoiseScalesCfg, \
-    DomainRandCfg, EventCfg, ActionDelayCfg, SimCfg, PhysxCfg
+from isaaclab.utils import configclass
+from isaaclab_rl.rsl_rl import (  # noqa:F401
+    RslRlOnPolicyRunnerCfg,
+    RslRlPpoActorCriticCfg,
+    RslRlPpoAlgorithmCfg,
+    RslRlRndCfg,
+    RslRlSymmetryCfg,
+)
 
-from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg, RslRlRndCfg, RslRlSymmetryCfg  # noqa:F401
+import legged_lab.mdp as mdp
+
+from .base_config import (
+    ActionDelayCfg,
+    BaseSceneCfg,
+    CommandRangesCfg,
+    CommandsCfg,
+    DomainRandCfg,
+    EventCfg,
+    HeightScannerCfg,
+    NoiseCfg,
+    NoiseScalesCfg,
+    NormalizationCfg,
+    ObsScalesCfg,
+    PhysxCfg,
+    RewardCfg,
+    RobotCfg,
+    SimCfg,
+)
 
 
 @configclass
@@ -28,8 +61,8 @@ class BaseEnvCfg:
             resolution=0.1,
             size=(1.6, 1.0),
             debug_vis=False,
-            drift_range=(0.0, 0.0)  # (0.3, 0.3)
-        )
+            drift_range=(0.0, 0.0),  # (0.3, 0.3)
+        ),
     )
     robot: RobotCfg = RobotCfg(
         actor_obs_history_length=10,
@@ -52,7 +85,7 @@ class BaseEnvCfg:
         ),
         clip_observations=100.0,
         clip_actions=100.0,
-        height_scan_offset=0.5
+        height_scan_offset=0.5,
     )
     commands: CommandsCfg = CommandsCfg(
         resampling_time_range=(10.0, 10.0),
@@ -62,10 +95,7 @@ class BaseEnvCfg:
         heading_control_stiffness=0.5,
         debug_vis=True,
         ranges=CommandRangesCfg(
-            lin_vel_x=(-0.6, 1.0),
-            lin_vel_y=(-0.5, 0.5),
-            ang_vel_z=(-1.57, 1.57),
-            heading=(-math.pi, math.pi)
+            lin_vel_x=(-0.6, 1.0), lin_vel_y=(-0.5, 0.5), ang_vel_z=(-1.57, 1.57), heading=(-math.pi, math.pi)
         ),
     )
     noise: NoiseCfg = NoiseCfg(
@@ -76,7 +106,7 @@ class BaseEnvCfg:
             joint_pos=0.01,
             joint_vel=1.5,
             height_scan=0.1,
-        )
+        ),
     )
     domain_rand: DomainRandCfg = DomainRandCfg(
         events=EventCfg(
@@ -128,21 +158,11 @@ class BaseEnvCfg:
                 mode="interval",
                 interval_range_s=(10.0, 15.0),
                 params={"velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0)}},
-            )
-
+            ),
         ),
-        action_delay=ActionDelayCfg(
-            enable=False,
-            params={"max_delay": 5, "min_delay": 0}
-        ),
+        action_delay=ActionDelayCfg(enable=False, params={"max_delay": 5, "min_delay": 0}),
     )
-    sim: SimCfg = SimCfg(
-        dt=0.005,
-        decimation=4,
-        physx=PhysxCfg(
-            gpu_max_rigid_patch_count=10 * 2**15
-        )
-    )
+    sim: SimCfg = SimCfg(dt=0.005, decimation=4, physx=PhysxCfg(gpu_max_rigid_patch_count=10 * 2**15))
 
     def __post_init__(self):
         pass

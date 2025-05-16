@@ -1,7 +1,14 @@
 # Copyright (c) 2022-2025, The Isaac Lab Project Developers.
 # All rights reserved.
+# Original code is licensed under BSD-3-Clause.
 #
-# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025-2026, The Legged Lab Project Developers.
+# All rights reserved.
+# Modifications are licensed under BSD-3-Clause.
+#
+# This file contains code derived from Isaac Lab Project (BSD-3-Clause license)
+# with modifications by Legged Lab Project (BSD-3-Clause license).
+
 
 """Configuration for Unitree robots.
 
@@ -15,6 +22,7 @@ Reference: https://github.com/unitreerobotics/unitree_ros
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
+
 from legged_lab.assets import ISAAC_ASSET_DIR
 
 H1_CFG = ArticulationCfg(
@@ -53,7 +61,7 @@ H1_CFG = ArticulationCfg(
                 ".*_hip_roll_joint",
                 ".*_hip_pitch_joint",
                 ".*_knee_joint",
-                ".*torso_joint"
+                ".*torso_joint",
             ],
             effort_limit_sim={
                 ".*_hip_yaw_joint": 200.0,
@@ -96,7 +104,7 @@ H1_CFG = ArticulationCfg(
                 ".*_shoulder_pitch_joint",
                 ".*_shoulder_roll_joint",
                 ".*_shoulder_yaw_joint",
-                ".*_elbow_joint"
+                ".*_elbow_joint",
             ],
             effort_limit_sim={
                 ".*_shoulder_pitch_joint": 40.0,

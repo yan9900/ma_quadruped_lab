@@ -1,9 +1,21 @@
-from legged_lab.utils import task_registry
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# All rights reserved.
+# Original code is licensed under BSD-3-Clause.
+#
+# Copyright (c) 2025-2026, The Legged Lab Project Developers.
+# All rights reserved.
+# Modifications are licensed under BSD-3-Clause.
+#
+# This file contains code derived from Isaac Lab Project (BSD-3-Clause license)
+# with modifications by Legged Lab Project (BSD-3-Clause license).
 
 import argparse
 
 from isaaclab.app import AppLauncher
 from rsl_rl.runners import OnPolicyRunner
+
+from legged_lab.utils import task_registry
+
 # local imports
 import legged_lab.utils.cli_args as cli_args  # isort: skip
 
@@ -22,14 +34,15 @@ args_cli, hydra_args = parser.parse_known_args()
 # launch omniverse app
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
+import os
+from datetime import datetime
+
+import torch
 from isaaclab.utils.io import dump_yaml
+from isaaclab_tasks.utils import get_checkpoint_path
 
 from legged_lab.envs import *  # noqa:F401, F403
 from legged_lab.utils.cli_args import update_rsl_rl_cfg
-from isaaclab_tasks.utils import get_checkpoint_path
-import os
-from datetime import datetime
-import torch
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
@@ -84,6 +97,6 @@ def train():
     runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     train()
     simulation_app.close()
