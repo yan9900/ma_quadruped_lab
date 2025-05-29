@@ -182,8 +182,8 @@ G1_CFG = ArticulationCfg(
                 ".*_hip_pitch_joint": 88.0,
                 ".*_knee_joint": 139.0,
                 ".*waist_yaw_joint": 88.0,
-                ".*waist_roll_joint": 50.0,
-                ".*waist_pitch_joint": 50.0,
+                ".*waist_roll_joint": 35.0,
+                ".*waist_pitch_joint": 35.0,
             },
             velocity_limit_sim={
                 ".*_hip_yaw_joint": 32.0,
@@ -191,8 +191,8 @@ G1_CFG = ArticulationCfg(
                 ".*_hip_pitch_joint": 32.0,
                 ".*_knee_joint": 20.0,
                 ".*waist_yaw_joint": 32.0,
-                ".*waist_roll_joint": 37.0,
-                ".*waist_pitch_joint": 37.0,
+                ".*waist_roll_joint": 30.0,
+                ".*waist_pitch_joint": 30.0,
             },
             stiffness={
                 ".*_hip_yaw_joint": 150.0,
@@ -213,12 +213,12 @@ G1_CFG = ArticulationCfg(
         "feet": ImplicitActuatorCfg(
             joint_names_expr=[".*_ankle_pitch_joint", ".*_ankle_roll_joint"],
             effort_limit_sim={
-                ".*_ankle_pitch_joint": 50.0,
-                ".*_ankle_roll_joint": 50.0,
+                ".*_ankle_pitch_joint": 35.0,
+                ".*_ankle_roll_joint": 35.0,
             },
             velocity_limit_sim={
-                ".*_ankle_pitch_joint": 37.0,
-                ".*_ankle_roll_joint": 37.0,
+                ".*_ankle_pitch_joint": 30.0,
+                ".*_ankle_roll_joint": 30.0,
             },
             stiffness=20.0,
             damping=2.0,
