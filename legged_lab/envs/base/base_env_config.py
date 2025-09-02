@@ -206,6 +206,7 @@ class BaseAgentCfg(RslRlOnPolicyRunnerCfg):
     experiment_name = ""
     run_name = ""
     logger = "wandb"
+    # logger = "tensorboard"  # 改为tensorboard避免wandb交互
     neptune_project = "leggedlab"
     wandb_project = "leggedlab"
     resume = False

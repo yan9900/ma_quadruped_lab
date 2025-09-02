@@ -55,7 +55,7 @@ def train():
 
     env_class_name = args_cli.task
     env_cfg, agent_cfg = task_registry.get_cfgs(env_class_name)
-    env_class = task_registry.get_task_class(env_class_name)
+    env_class = task_registry.get_task_class(env_class_name)  
 
     if args_cli.num_envs is not None:
         env_cfg.scene.num_envs = args_cli.num_envs
@@ -72,7 +72,7 @@ def train():
         env_cfg.scene.seed = seed
         agent_cfg.seed = seed
 
-    env = env_class(env_cfg, args_cli.headless)
+    env = env_class(env_cfg, args_cli.headless) #base_env.py中的BaseEnv类
 
     log_root_path = os.path.join("logs", agent_cfg.experiment_name)
     log_root_path = os.path.abspath(log_root_path)

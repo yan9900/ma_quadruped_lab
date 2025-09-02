@@ -22,6 +22,7 @@ from isaaclab.sensors import ContactSensor, RayCaster
 from isaaclab.sim import PhysxCfg, SimulationContext
 from isaaclab.utils.buffers import CircularBuffer, DelayBuffer
 from rsl_rl.env import VecEnv
+from tensordict import TensorDict
 
 from legged_lab.envs.base.base_env_config import BaseEnvCfg
 from legged_lab.utils.env_utils.scene import SceneCfg
@@ -53,6 +54,7 @@ class BaseEnv(VecEnv):
         )
         self.sim = SimulationContext(sim_cfg)
 
+        # 注意区分SceneCfg和SceneEntityCfg,SceneCfg关注的是场景整体配置，而SceneEntityCfg关注的是场景中的具体实体
         scene_cfg = SceneCfg(config=cfg.scene, physics_dt=self.physics_dt, step_dt=self.step_dt)
         self.scene = InteractiveScene(scene_cfg)
         self.sim.reset()
@@ -83,7 +85,8 @@ class BaseEnv(VecEnv):
             self.event_manager.apply(mode="startup")
         self.reset(env_ids)
 
-    def init_buffers(self):
+    def init_buffers(self): 
+        #实际控制过程中，action和obs都存在延时
         self.extras = {}
 
         self.max_episode_length_s = self.cfg.scene.max_episode_length_s
@@ -91,7 +94,9 @@ class BaseEnv(VecEnv):
         self.num_actions = self.robot.data.default_joint_pos.shape[1]
         self.clip_actions = self.cfg.normalization.clip_actions
         self.clip_obs = self.cfg.normalization.clip_observations
-
+        
+        # action buffer用来模仿控制延迟，这里只是初始化
+        # action_buffer是一个delaybuffer实例
         self.action_scale = self.cfg.robot.action_scale
         self.action_buffer = DelayBuffer(
             self.cfg.domain_rand.action_delay.params["max_delay"], self.num_envs, device=self.device
@@ -99,6 +104,7 @@ class BaseEnv(VecEnv):
         self.action_buffer.compute(
             torch.zeros(self.num_envs, self.num_actions, dtype=torch.float, device=self.device, requires_grad=False)
         )
+        # 随机初始化延迟时间
         if self.cfg.domain_rand.action_delay.enable:
             time_lags = torch.randint(
                 low=self.cfg.domain_rand.action_delay.params["min_delay"],
@@ -109,8 +115,17 @@ class BaseEnv(VecEnv):
             )
             self.action_buffer.set_time_lag(time_lags, torch.arange(self.num_envs, device=self.device))
 
+        # init obs buffer
+        # SceneEntityCfg独立于BaseEnvCfg用来配置和解析场景中的实体（如机器人、传感器等）
+        # robot_cfg, termination_contact_cfg, feet_cfg都是SceneEntityCfg实例
+        # 创建一个配置对象，描述“我要操作名为 robot 的场景实体”
+        # resolve()是将对应的body_names转化为body_ids（索引）
+        
+        # robot 不指定 body_names → 绑定 robot 下所有 body。
         self.robot_cfg = SceneEntityCfg(name="robot")
         self.robot_cfg.resolve(self.scene)
+        
+        # contact_sensor 是一个实体，里面可以有多个 body，你可以用 body_names 精确指定关注的部分（如脚、传感器片段等）
         self.termination_contact_cfg = SceneEntityCfg(
             name="contact_sensor", body_names=self.cfg.robot.terminate_contacts_body_names
         )
@@ -241,10 +256,9 @@ class BaseEnv(VecEnv):
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset(env_ids)
 
-        actor_obs, critic_obs = self.compute_observations()
-        self.extras["observations"] = {"critic": critic_obs}
+        obs_dict = self.get_observations()
 
-        return actor_obs, reward_buf, self.reset_buf, self.extras
+        return obs_dict, reward_buf, self.reset_buf, self.extras
 
     def check_reset(self):
         net_contact_forces = self.contact_sensor.data.net_forces_w_history
@@ -310,7 +324,15 @@ class BaseEnv(VecEnv):
     def get_observations(self):
         actor_obs, critic_obs = self.compute_observations()
         self.extras["observations"] = {"critic": critic_obs}
-        return actor_obs, self.extras
+        
+        # Create a TensorDict which supports both dict access and .to() method
+        from tensordict import TensorDict
+        
+        obs_dict = TensorDict({
+            "policy": actor_obs
+        }, batch_size=torch.Size([self.num_envs]))
+        
+        return obs_dict
 
     @staticmethod
     def seed(seed: int = -1) -> int:
