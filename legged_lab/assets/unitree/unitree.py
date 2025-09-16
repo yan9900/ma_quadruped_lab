@@ -21,6 +21,7 @@ Reference: https://github.com/unitreerobotics/unitree_ros
 
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
+from isaaclab.actuators import DCMotorCfg
 from isaaclab.assets.articulation import ArticulationCfg
 
 from legged_lab.assets import ISAAC_ASSET_DIR
@@ -278,3 +279,62 @@ G1_CFG = ArticulationCfg(
         ),
     },
 )
+
+# Go2 robot configuration
+"""
+body_names: ['base', 'FL_hip', 'FR_hip', 'Head_upper', 'RL_hip', 'RR_hip', 'FL_thigh', 
+'FR_thigh', 'Head_lower', 'RL_thigh', 'RR_thigh', 'FL_calf', 'FR_calf', 'RL_calf', 'RR_calf', 
+'FL_foot', 'FR_foot', 'RL_foot', 'RR_foot']
+
+joints_names: ['FL_hip_joint', 'FR_hip_joint', 'RL_hip_joint', 'RR_hip_joint', 'FL_thigh_joint', 
+'FR_thigh_joint', 'RL_thigh_joint', 'RR_thigh_joint', 'FL_calf_joint', 'FR_calf_joint', 
+'RL_calf_joint', 'RR_calf_joint']
+"""
+UNITREE_GO2_CFG = ArticulationCfg(
+    spawn=sim_utils.UsdFileCfg(
+        usd_path=f"{ISAAC_ASSET_DIR}/unitree/go2/go2.usd",
+        activate_contact_sensors=True,
+        rigid_props=sim_utils.RigidBodyPropertiesCfg(
+            disable_gravity=False,
+            retain_accelerations=False,
+            linear_damping=0.0,
+            angular_damping=0.0,
+            max_linear_velocity=1000.0,
+            max_angular_velocity=1000.0,
+            max_depenetration_velocity=1.0,
+        ),
+        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+            enabled_self_collisions=False, solver_position_iteration_count=4, solver_velocity_iteration_count=0
+        ),
+    ),
+    init_state=ArticulationCfg.InitialStateCfg(
+        pos=(0.0, 0.0, 0.38),
+        # pos=(0.0, 0.0, 0.05),
+        # Quaternion
+        rot = (1.0, 0.0, 0.0, 0.0), #(w, x, y, z) 正常站立
+        # rot=(0.0, 1.0, 0.0, 0.0),
+
+        joint_pos={
+            ".*L_hip_joint": 0.0,
+            ".*R_hip_joint": -0.0,
+            "F.*_thigh_joint": 0.8,
+            "R.*_thigh_joint": 0.8,
+            ".*_calf_joint": -1.5,
+        },
+        joint_vel={".*": 0.0},
+    ),
+    soft_joint_pos_limit_factor=0.9,
+    actuators={
+        "legs": DCMotorCfg(
+            joint_names_expr=[".*"],
+            effort_limit=23.5,
+            saturation_effort=23.5,  # 需要确认 35.5
+            velocity_limit=30.0,
+            stiffness=25.0,
+            damping=0.5,
+            friction=0.0,
+        ),
+    },
+)
+"""Configuration of Unitree Go2 using DC motor.
+"""

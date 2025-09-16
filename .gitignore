@@ -5,3 +5,10 @@ outputs
 logs
 run_bash.sh
 wandb
+legged_lab/framework_demo.py
+legged_lab/go2_registration_analysis.py
+legged_lab/INTERVIEW_QA.md
+legged_lab/isaaclab_scene_guide.py
+legged_lab/LEARNING_GUIDE.md
+legged_lab/PROJECT_STRUCTURE.md
+legged_lab/training_flow_demo.py
