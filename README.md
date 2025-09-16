@@ -1,7 +1,7 @@
 # Legged Lab: Direct IsaacLab Workflow for Legged Robots
 
 [![IsaacSim](https://img.shields.io/badge/IsaacSim-5.0.0.0-silver.svg)](https://docs.omniverse.nvidia.com/isaacsim/latest/overview.html)
-[![Isaac Lab](https://img.shields.io/badge/IsaacLab-0.45.12-silver)](https://isaac-sim.github.io/IsaacLab)
+[![Isaac Lab](https://img.shields.io/badge/IsaacLab-2.2.1-silver)](https://isaac-sim.github.io/IsaacLab)
 [![RSL_RL](https://img.shields.io/badge/RSL_RL-3.0.1-silver)](https://github.com/leggedrobotics/rsl_rl)
 [![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://docs.python.org/3/whatsnew/3.11.html)
 [![Linux platform](https://img.shields.io/badge/platform-linux--64-orange.svg)](https://releases.ubuntu.com/22.04/)
@@ -35,7 +35,7 @@ LeggedLab is built against the latest version of Isaacsim/IsaacLab. It is recomm
 
 - Clone this repository separately from the Isaac Lab installation (i.e. outside the `IsaacLab` directory):
 
-- you may run into some dependency versions issues while installing isaacsim 5.0.0.0 and isaaclab 0.45.12, you can refer to the file legged_lab/legged_lab_requirements.txt to manually install the required packages with compatible versions.
+- you may run into some dependency versions issues while installing isaacsim 5.0.0.0 and isaaclab 2.2.1 (0.45.12), you can refer to the file legged_lab/legged_lab_requirements.txt to manually install the required packages with compatible versions.
 
 ```bash
 # Option 1: HTTPS
@@ -43,6 +43,11 @@ git clone https://github.com/yan9900/ma_quadruped_lab.git
 
 # Option 2: SSH
 git clone git@github.com:yan9900/ma_quadruped_lab.git
+```
+
+- Since we are using a local version of rsl_rl, we have to uninstall the original one with following command
+```bash
+pip uninstall rsl-rl-lib
 ```
 
 - Using a python interpreter that has Isaac Lab installed, install the library
