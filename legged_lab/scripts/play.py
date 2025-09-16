@@ -33,7 +33,8 @@ cli_args.add_rsl_rl_args(parser)
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
 
-# launch omniverse app
+# 启动Omniverse应用（仿真环境）
+# 用来控制主循环
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
@@ -60,13 +61,30 @@ def play():
         # 禁用push robot事件，但保持reset_base以确保随机初始姿态
         env_cfg.domain_rand.events.push_robot = None
         # 确保保持Fall Recovery的随机初始姿态设置
-        # 不修改env_cfg.domain_rand.events.reset_base - 这个很重要！
+        # env_cfg.domain_rand.events.reset_base.params = {
+        #     "pose_range": {
+        #         "x": (-0.0, 0.0), "y": (-0.0, 0.0), "z": (0.0, 0.0),
+        #         # "roll": (-3.14, 3.14), "pitch": (-3.14, 3.14), "yaw": (-3.14, 3.14)
+        #         "roll": (-0.0, -0.0), "pitch": (0.0, 0.0), "yaw": (-3.14, 3.14)
+
+        #     },
+        #     "velocity_range": {
+        #         "x": (-0.0, 0.0), "y": (-0.0, 0.0), "z": (-0.0, 0.0),
+        #         "roll": (-0.0, 0.0), "pitch": (-0.0, 0.0), "yaw": (-0.0, 0.0)
+        #     }
+        # }
+
         
         # 保持Fall Recovery的长episode时间
-        env_cfg.scene.max_episode_length_s = 40.0
+        env_cfg.scene.max_episode_length_s = 5.0
         # 较少环境数量用于演示观察
-        env_cfg.scene.num_envs = 16
+        env_cfg.scene.num_envs = 10
         env_cfg.scene.env_spacing = 3.0  # 增大间距以便观察
+        
+        # env_cfg.scene.robot.init_state.pos = (0.0, 0.0, 0.1)
+        # env_cfg.scene.robot.init_state.rot = (0.0, 0.0, 1.0, 0.0)  #躺下
+        
+ 
         
         print("[INFO] Fall Recovery: Keeping random initial poses for recovery demonstration")
         print("[INFO] Robots will start from various fallen/inverted positions")
@@ -85,20 +103,21 @@ def play():
         # 原有的常规配置
         env_cfg.noise.add_noise = False
         env_cfg.domain_rand.events.push_robot = None
-        env_cfg.scene.max_episode_length_s = 40.0
-        env_cfg.scene.num_envs = 50
+        env_cfg.scene.max_episode_length_s = 10.0
+        env_cfg.scene.num_envs = 9 # num of robots
         env_cfg.scene.env_spacing = 2.5
-        env_cfg.commands.ranges.lin_vel_x = (0.6, 0.6)
+        env_cfg.commands.ranges.lin_vel_x = (0.6, 1.2)
         env_cfg.commands.ranges.lin_vel_y = (0.0, 0.0)
         env_cfg.commands.ranges.heading = (0.0, 0.0)
         env_cfg.scene.height_scanner.drift_range = (0.0, 0.0)
+        env_cfg.commands.rel_standing_envs = 0.0  # all envs have moving commands
 
         # env_cfg.scene.terrain_generator = None
         # env_cfg.scene.terrain_type = "plane"
 
         if env_cfg.scene.terrain_generator is not None:
-            env_cfg.scene.terrain_generator.num_rows = 5
-            env_cfg.scene.terrain_generator.num_cols = 5
+            env_cfg.scene.terrain_generator.num_rows = 3
+            env_cfg.scene.terrain_generator.num_cols = 3
             env_cfg.scene.terrain_generator.curriculum = True
             env_cfg.scene.terrain_generator.difficulty_range = (0.1, 0.3)
 
@@ -148,54 +167,34 @@ def play():
         step_count = 0
         reset_interval = 1000  # 重置间隔
 
+    # 确保go2从一个静止的状态开始
+    # define wait time
+    dt = env_cfg.sim.dt
+    wait_time = int(0.5 / dt)
+
     while simulation_app.is_running():
         with torch.inference_mode():
             # Fall Recovery特殊处理：定期重置并输出状态信息
             if "fall_recovery" in env_class_name.lower():
-                if step_count % reset_interval == 0:
-                    # 重置所有环境
-                    env_ids = torch.arange(env.num_envs, device=env.device)
-                    env.reset(env_ids)
+                # if step_count < wait_time:
+                #     actions = torch.zeros_like(policy(obs_dict))
+                # elif step_count % reset_interval == 0:
+                #     # 重置所有环境
+                #     env_ids = torch.arange(env.num_envs, device=env.device)
+                #     env.reset(env_ids)
                     
-                    # 为了确保观察到Fall Recovery行为，手动设置一些更极端的倒地姿态
-                    robot = env.scene["robot"]
-                    # 设置一些机器人为完全倒立状态
-                    if step_count == 0:  # 只在第一次重置时这样做
-                        with torch.no_grad():
-                            # 让一半机器人完全倒立
-                            half_envs = env.num_envs // 2
-                            inverted_orientations = torch.tensor([0.0, 1.0, 0.0, 0.0], device=env.device).repeat(half_envs, 1)  # 完全倒立
-                            sideways_orientations = torch.tensor([0.707, 0.0, 0.707, 0.0], device=env.device).repeat(env.num_envs - half_envs, 1)  # 侧翻
-                            
-                            # 组合姿态
-                            combined_orientations = torch.cat([inverted_orientations, sideways_orientations], dim=0)
-                            robot.write_root_pose_to_sim(
-                                root_pose=torch.cat([robot.data.root_pos_w, combined_orientations], dim=-1)
-                            )
+                #     obs_dict = env.get_observations()
+                #     obs = obs_dict["policy"]
+                #     step_count = 0
                     
-                    obs_dict = env.get_observations()
-                    obs = obs_dict["policy"]
-                    step_count = 0
-                    
-                    # 输出机器人状态信息
-                    robot_positions = env.scene["robot"].data.root_pos_w
-                    robot_orientations = env.scene["robot"].data.root_quat_w
-                    
-                    # 计算向上向量 (用于检查机器人是否正立)
-                    from isaaclab.utils.math import quat_apply
-                    gravity_vector = torch.tensor([0.0, 0.0, -1.0], device=robot_orientations.device).unsqueeze(0).repeat(robot_orientations.shape[0], 1)
-                    robot_up_vectors = quat_apply(robot_orientations, gravity_vector)
-                    upward_dots = torch.sum(robot_up_vectors * torch.tensor([0.0, 0.0, -1.0], device=robot_up_vectors.device), dim=-1)
-                    
-                    upright_count = (upward_dots > 0.8).sum().item()
-                    fallen_count = (upward_dots < -0.5).sum().item()
-                    
-                    print(f"[Reset {step_count//reset_interval}] Upright: {upright_count}/{env_cfg.scene.num_envs}, "
-                          f"Fallen: {fallen_count}/{env_cfg.scene.num_envs}")
+                # else:
+                #     actions = policy(obs_dict)
+                actions = policy(obs_dict)
                 
-                step_count += 1
+                # step_count += 1
             
-            actions = policy(obs_dict)
+            else:
+                actions = policy(obs_dict)
             obs_dict, _, _, _ = env.step(actions)
 
 

@@ -281,6 +281,15 @@ G1_CFG = ArticulationCfg(
 )
 
 # Go2 robot configuration
+"""
+body_names: ['base', 'FL_hip', 'FR_hip', 'Head_upper', 'RL_hip', 'RR_hip', 'FL_thigh', 
+'FR_thigh', 'Head_lower', 'RL_thigh', 'RR_thigh', 'FL_calf', 'FR_calf', 'RL_calf', 'RR_calf', 
+'FL_foot', 'FR_foot', 'RL_foot', 'RR_foot']
+
+joints_names: ['FL_hip_joint', 'FR_hip_joint', 'RL_hip_joint', 'RR_hip_joint', 'FL_thigh_joint', 
+'FR_thigh_joint', 'RL_thigh_joint', 'RR_thigh_joint', 'FL_calf_joint', 'FR_calf_joint', 
+'RL_calf_joint', 'RR_calf_joint']
+"""
 UNITREE_GO2_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
         usd_path=f"{ISAAC_ASSET_DIR}/unitree/go2/go2.usd",
@@ -300,6 +309,11 @@ UNITREE_GO2_CFG = ArticulationCfg(
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.38),
+        # pos=(0.0, 0.0, 0.05),
+        # Quaternion
+        rot = (1.0, 0.0, 0.0, 0.0), #(w, x, y, z) 正常站立
+        # rot=(0.0, 1.0, 0.0, 0.0),
+
         joint_pos={
             ".*L_hip_joint": 0.0,
             ".*R_hip_joint": -0.0,
@@ -314,7 +328,7 @@ UNITREE_GO2_CFG = ArticulationCfg(
         "legs": DCMotorCfg(
             joint_names_expr=[".*"],
             effort_limit=23.5,
-            saturation_effort=23.5, #35.5?
+            saturation_effort=23.5,  # 需要确认 35.5
             velocity_limit=30.0,
             stiffness=25.0,
             damping=0.5,

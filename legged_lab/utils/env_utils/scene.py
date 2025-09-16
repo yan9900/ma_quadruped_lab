@@ -28,6 +28,9 @@ if TYPE_CHECKING:
 @configclass
 class SceneCfg(InteractiveSceneCfg):
     """Configuration for a cart-pole scene."""
+    # 为什么用引号包裹类型名？
+    # 在 Python 的类型注解中，如果你引用的类型在当前作用域还没定义（比如跨文件引用），
+    # 可以用字符串包裹类型名，告诉类型检查器“稍后会有这个类型”。
 
     def __init__(self, config: "BaseSceneCfg", physics_dt, step_dt):
         super().__init__(num_envs=config.num_envs, env_spacing=config.env_spacing)

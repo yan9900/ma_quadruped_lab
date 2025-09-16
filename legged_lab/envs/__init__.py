@@ -34,6 +34,7 @@ from legged_lab.envs.h1.h1_config import (
 # Import GO2 environment configurations
 from legged_lab.envs.go2.go2_config import (
     Go2FallRecoveryAgentCfg,
+    Go2FallRecoveryEnv,
     Go2FallRecoveryFlatEnvCfg,
     Go2FlatAgentCfg,
     Go2FlatEnvCfg,
@@ -51,4 +52,4 @@ task_registry.register("gr2_rough", BaseEnv, GR2RoughEnvCfg(), GR2RoughAgentCfg(
 # Register GO2 environments
 task_registry.register("go2_flat", BaseEnv, Go2FlatEnvCfg(), Go2FlatAgentCfg())
 task_registry.register("go2_rough", BaseEnv, Go2RoughEnvCfg(), Go2RoughAgentCfg())
-task_registry.register("go2_fall_recovery", BaseEnv, Go2FallRecoveryFlatEnvCfg(), Go2FallRecoveryAgentCfg())
+task_registry.register("go2_fall_recovery", Go2FallRecoveryEnv, Go2FallRecoveryFlatEnvCfg(), Go2FallRecoveryAgentCfg())

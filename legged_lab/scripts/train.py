@@ -49,8 +49,15 @@ torch.backends.cudnn.allow_tf32 = True
 torch.backends.cudnn.deterministic = False
 torch.backends.cudnn.benchmark = False
 
+# 具体的传入参数结合envs/__init__.py
+# 例子：task_registry.register("go2_flat", BaseEnv, Go2FlatEnvCfg(), Go2FlatAgentCfg())
+# task_name = "go2_flat"
+# env_class = BaseEnv
+# env_cfg = Go2FlatEnvCfg()
+# agent_cfg = Go2FlatAgentCfg()
 
 def train():
+    # declare
     runner: OnPolicyRunner
 
     env_class_name = args_cli.task
@@ -71,8 +78,9 @@ def train():
         seed = agent_cfg.seed + app_launcher.local_rank
         env_cfg.scene.seed = seed
         agent_cfg.seed = seed
-
-    env = env_class(env_cfg, args_cli.headless) #base_env.py中的BaseEnv类
+    
+    #base_env.py中的BaseEnv类
+    env = env_class(env_cfg, args_cli.headless) 
 
     log_root_path = os.path.join("logs", agent_cfg.experiment_name)
     log_root_path = os.path.abspath(log_root_path)
@@ -82,6 +90,21 @@ def train():
     if agent_cfg.run_name:
         log_dir += f"_{agent_cfg.run_name}"
     log_dir = os.path.join(log_root_path, log_dir)
+    
+    #instantiate
+    """
+    inputs:
+        env: 
+            env <- env_class(env_cfg, args_cli.headless) 实例化的环境对象，基于指定的环境配置和是否无头模式
+            env_class <- task_registry.get_task_class(env_class_name) 从任务注册表中获取的环境类
+            env_class : VecEnv的子类，表示具体的环境实现，取决于在注册任务时指定的类，参考envs/__init__.py
+            env_cfg: 环境配置要匹配对应的环境
+        agent_cfg.to_dict(): 将agent_cfg:baseAgentCfg配置转换为字典形式，包含了算法、网络结构、优化器等信息
+        log_dir: 日志目录路径
+        device: 指定训练设备
+        
+        def __init__(self, env: VecEnv, train_cfg: dict, log_dir: str | None = None, device="cpu"):
+    """
     runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
 
     if agent_cfg.resume:
