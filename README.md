@@ -49,7 +49,7 @@ git clone git@github.com:yan9900/ma_quadruped_lab.git
 
 ```bash
 cd ma_quadruped_lab
-pip install -e .
+pip install -r requirements.txt
 ```
 
 - Verify that the extension is correctly installed by running the following command:

@@ -20,6 +20,6 @@ setup(
     install_requires=[
         # 'isaacsim',
         "IsaacLab",
-        "rsl-rl-lib @ file://./rsl_rl",  # use local rsl_rl
+        # "rsl-rl-lib @ ./rsl_rl",  # use local rsl_rl
     ],
 )
