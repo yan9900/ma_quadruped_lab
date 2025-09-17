@@ -31,17 +31,18 @@ Deploy Code: https://github.com/Hellod035/LeggedLabDeploy -->
 
 LeggedLab is built against the latest version of Isaacsim/IsaacLab. It is recommended to follow the latest updates of legged lab.
 ### 1. Install Isaac Sim + Isaac Lab
-#### Option 1: Install Isaac Sim by pip
 
-- Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html). We recommend using the conda installation as it simplifies calling Python scripts from the terminal.
-> [!NOTE]  
-> you may run into some dependency versions issues while installing isaacsim 5.0.0.0 and isaaclab 2.2.1 (0.45.12), you can refer to the file legged_lab/legged_lab_requirements.txt to manually install the required packages with compatible versions.
-
-#### Option 2: Install Isaac Sim locally
+#### Option 1 (recommanded): Install Isaac Sim locally
 - Install Isaac Sim by building from source code following [quick start](https://github.com/isaac-sim/IsaacSim?tab=readme-ov-file#quick-start)
 - Install Isaac Lab by following [getting start](https://github.com/isaac-sim/IsaacLab#getting-started)
 > [!NOTE]  
 >  have to run ```source _isaac_sim/setup_conda_env.sh```（under IsaacLab folder) every time after activating the conda environment.
+
+#### Option 2: Install Isaac Sim with pip
+
+- Install Isaac Lab by following the [installation guide](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/index.html). We recommend using the conda installation as it simplifies calling Python scripts from the terminal.
+> [!NOTE]  
+> you may run into some dependency versions issues while installing isaacsim 5.0.0.0 and isaaclab 2.2.1 (0.45.12), you can refer to the file legged_lab/legged_lab_requirements.txt to manually install the required packages with compatible versions.
 
 ### 2. Install this repository
 - Clone this repository separately from the Isaac Lab installation (i.e. outside the `IsaacLab` directory):
