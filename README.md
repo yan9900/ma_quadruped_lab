@@ -59,6 +59,8 @@ cd ma_quadruped_lab
 pip install -r requirements.txt
 ```
 
+### 3. Usage
+
 - Verify that the extension is correctly installed by running the following command:
 
 ```bash
