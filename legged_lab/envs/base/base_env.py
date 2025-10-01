@@ -281,6 +281,7 @@ class BaseEnv(VecEnv):
         cliped_actions = torch.clip(delayed_actions, -self.clip_actions, self.clip_actions).to(self.device)
         processed_actions = cliped_actions * self.action_scale + self.robot.data.default_joint_pos
         # print("body_names:", self.robot.data.body_names)
+        print(f"current base height: {self.robot.data.root_pos_w[0,2].item():.4f}", end='\r')
 
         # 每个环境步执行 decimation 次物理仿真步，每次用同一个动作。
         # step_dt = self.cfg.sim.dt * self.cfg.sim.decimation

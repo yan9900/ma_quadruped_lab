@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+from sklearn import base
 import torch
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers.scene_entity_cfg import SceneEntityCfg
@@ -268,14 +270,23 @@ class Go2FallRecoveryAgentCfg(BaseAgentCfg):
 @configclass
 class Go2RewardCfg:
     """Basic GO2 reward configuration"""
+    #===================================kinematic rewards===================================
     # Velocity Tracking Rewards
-    track_lin_vel_xy_exp = RewTerm(func=mdp.track_lin_vel_xy_yaw_frame_exp, weight=3.0, params={"std": 0.5})
-    track_ang_vel_z_exp = RewTerm(func=mdp.track_ang_vel_z_world_exp, weight=1.5, params={"std": 0.5})
-    
+    track_lin_vel_xy_exp = RewTerm(func=mdp.track_lin_vel_xy_base_frame_exp, weight=3.0, params={"std": 0.5})
+    track_ang_vel_z_exp = RewTerm(func=mdp.track_ang_vel_z_base_frame_exp, weight=1.5, params={"std": 0.5}) 
+
     # Root Penalties
     lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
     ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.05)
+    # Orientation "upward"
+    upward = RewTerm(func=mdp.upward, weight=1.0)
+    # newly added
+    # flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-2.5)
+    base_height_l2 = RewTerm(func=mdp.base_height_l2, weight=-5.0, 
+                            #  params={"target_height": 0.33, "sensor_cfg": SceneEntityCfg("height_scanner", body_names=[BASE_LINK_NAME])})
+                             params={"target_height": 0.5})
 
+    #===================================joint rewards===================================
     # Joint Penalties
     joint_torques_l2 = RewTerm(func=mdp.joint_torques_l2, weight=-2.5e-5)
     joint_vel_l2        = RewTerm(func=mdp.joint_vel_l2,     weight=0.0)
@@ -283,23 +294,22 @@ class Go2RewardCfg:
     joint_pos_limits    = RewTerm(func=mdp.joint_pos_limits, weight=-5.0)
     joint_vel_limits    = RewTerm(func=mdp.joint_vel_limits, weight=0.0)
     joint_power         = RewTerm(func=mdp.energy,           weight=-2.0e-5)  # energy == |tau * qdot|
-    joint_pos_penalty   = RewTerm(func=mdp.joint_deviation_l1, weight=-1.0)   # 用默认位形的 L1 偏差作形状正则
-    joint_mirror        = RewTerm(
-        func=mdp.joint_mirror, weight=-0.05,
-        params={"mirror_joints": [
-            # 这里建议在构建阶段把正则解析成 id 列表再传入
-            # 下方为“左右对称”成对关系（示意），可据你的 URDF 实际 joint 命名调整
-            (["FR_hip_joint","FR_thigh_joint","FR_calf_joint"],
-             ["RL_hip_joint","RL_thigh_joint","RL_calf_joint"]),
-            (["FL_hip_joint","FL_thigh_joint","FL_calf_joint"],
-             ["RR_hip_joint","RR_thigh_joint","RR_calf_joint"]),
-        ]}
-    )
+    joint_pos_penalty   = RewTerm(func=mdp.joint_deviation_l1, weight=-1.0,
+                                #   params={"asset_cfg": SceneEntityCfg(name="robot", body_names=[r".*_hip.*"])})   # 用默认位形的 L1 偏差作形状正则
+                                  params={"asset_cfg": SceneEntityCfg(name="robot", joint_names=[r".*_hip_joint"])})   # 用默认位形的 L1 偏差作形状正则, 只惩罚hip关节
     
+    #===================================action smoothness===================================
     # Action Penalties
     action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
     
-        # ---- Feet behavior (quadruped) ----
+    #===================================contact rewards===================================
+    undesired_contacts = RewTerm(func=mdp.undesired_contacts, weight=-1.0, 
+                                 params={"threshold": 1.0, 
+                                         "sensor_cfg": SceneEntityCfg("contact_sensor", 
+                                                                       body_names=[r".*base.*", r".*_hip.*", r".*_thigh.*", r".*_calf.*"])})
+    
+    # ===================================gait related rewards===================================
+    # # ---- Feet behavior (quadruped) ----
     feet_air_time = RewTerm(
         func=mdp.feet_air_time, weight=0.1,
         params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=[FOOT_REGEX]), "threshold": 0.5}
@@ -312,12 +322,8 @@ class Go2RewardCfg:
         func=mdp.feet_contact, weight=0.0,
         params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=[FOOT_REGEX]), "threshold": 1.0}
     )
-    feet_contact_without_cmd = RewTerm(
-        func=mdp.feet_contact_without_cmd, weight=0.1, # reward，鼓励在无命令时脚着地,或许0更合适？
-        params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=[FOOT_REGEX]), "threshold": 1.0}
-    )
     feet_slide = RewTerm(
-        func=mdp.feet_slide, weight=-0.1,
+        func=mdp.feet_slide_body_frame, weight=-0.1,
         params={
             "sensor_cfg": SceneEntityCfg("contact_sensor", body_names=[FOOT_REGEX]),
             "asset_cfg":  SceneEntityCfg("robot",          body_names=[FOOT_REGEX]),
@@ -327,26 +333,75 @@ class Go2RewardCfg:
         func=mdp.feet_height, weight=0.0,
         params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=[FOOT_REGEX]),
                 "asset_cfg":  SceneEntityCfg("robot",          body_names=[FOOT_REGEX]),
-                "target_height": 0.05}
+                "target_height": 0.05,"tanh_mult":2.0}
     )
     feet_height_body = RewTerm(
         func=mdp.feet_height_body, weight=-5.0,
         params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=[FOOT_REGEX]),
                 "asset_cfg":  SceneEntityCfg("robot",          body_names=[FOOT_REGEX]),
-                "target_height": -0.2}
+                "target_height": -0.2,"tanh_mult":2.0}
     )
+    # # feet_gait = RewTerm(
+    # #     func=mdp.feet_gait, weight=0.5,
+    # #     params={
+    # #         "sensor_cfg": SceneEntityCfg("contact_sensor", body_names=[FOOT_REGEX]),
+    # #         # 先按名字给出成对关系（构建期解析为 id 对更稳妥）
+    # #         "synced_feet_pair_ids": None,  # 若框架不自动解析，可在运行前注入 id 对
+    # #         "threshold": 1.0,
+    # #     }
+    # # )
     feet_gait = RewTerm(
-        func=mdp.feet_gait, weight=0.5,
+        func=mdp.GaitReward,
+        weight=0.5, #0.5
         params={
-            "sensor_cfg": SceneEntityCfg("contact_sensor", body_names=[FOOT_REGEX]),
-            # 先按名字给出成对关系（构建期解析为 id 对更稳妥）
-            "synced_feet_pair_ids": None,  # 若框架不自动解析，可在运行前注入 id 对
-            "threshold": 1.0,
-        }
+            "std": math.sqrt(0.5),
+            "max_err": 0.2,
+            "velocity_threshold": 0.5,
+            "command_threshold": 0.1,
+            # "synced_feet_pair_names": (("FL_foot", "RR_foot"), ("FR_foot", "RL_foot")), #trotting
+            # "synced_feet_pair_names": (("FL_foot", "FR_foot"), ("RL_foot", "RR_foot")), #bounding
+            "synced_feet_pair_names": (("FL_foot", "RL_foot"), ("FR_foot", "RR_foot")), # pacing
+            "asset_cfg": SceneEntityCfg("robot"),
+            "sensor_cfg": SceneEntityCfg(
+                "contact_sensor",
+                body_names=[FOOT_REGEX],
+            ),
+        },
     )
+    
+    joint_mirror        = RewTerm(
+        func=mdp.joint_mirror, weight=-0.05,
+        params={"mirror_joints": [
+            # 这里建议在构建阶段把正则解析成 id 列表再传入
+            # 下方为“左右对称”成对关系（示意），可据你的 URDF 实际 joint 命名调整
+            # 和feet_gait的顺序一致？
+            # trotting
+            # (["FL_hip_joint","FL_thigh_joint","FL_calf_joint"],
+            #  ["RR_hip_joint","RR_thigh_joint","RR_calf_joint"]),
+            # (["FR_hip_joint","FR_thigh_joint","FR_calf_joint"],
+            #  ["RL_hip_joint","RL_thigh_joint","RL_calf_joint"]),
+            # bounding
+            # (["FL_hip_joint","FL_thigh_joint","FL_calf_joint"],
+            #  ["FR_hip_joint","FR_thigh_joint","FR_calf_joint"]),
+            # (["RL_hip_joint","RL_thigh_joint","RL_calf_joint"],
+            #  ["RR_hip_joint","RR_thigh_joint","RR_calf_joint"]),
+            # pacing
+            (["FL_hip_joint","FL_thigh_joint","FL_calf_joint"],
+             ["RL_hip_joint","RL_thigh_joint","RL_calf_joint"]),
+            (["FR_hip_joint","FR_thigh_joint","FR_calf_joint"],
+             ["RR_hip_joint","RR_thigh_joint","RR_calf_joint"]),
+        ]}
+    )
+    
+    #====================================standing still rewards====================================
+    stand_still_without_cmd = RewTerm(
+        func=mdp.stand_still_without_cmd, weight = -2.0, 
+        params={"command_threshold": 0.1})
 
-    # ---- Orientation "upward" (keep) ----
-    upward = RewTerm(func=mdp.upward, weight=1.0)
+    feet_contact_without_cmd = RewTerm(
+        func=mdp.feet_contact_without_cmd, weight=0.1, 
+        params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=[FOOT_REGEX]), "threshold": 1.0}
+    )
 
 @configclass
 class Go2FlatEnvCfg(BaseEnvCfg):
@@ -378,7 +433,11 @@ class Go2FlatEnvCfg(BaseEnvCfg):
         #     "velocity_range": {"x": (-0.5,0.5),"y": (-0.5,0.5),"z": (-0.5,0.5),
         #                        "roll": (-0.5,0.5),"pitch": (-0.5,0.5),"yaw": (-0.5,0.5)},
         # }
-
+        
+        # 速度太小可能会影响gait
+        self.commands.ranges.lin_vel_x = (-1.0, 2.5)  # 前后速度
+        # 全部收到行走指令，不存在静止站立指令
+        self.commands.rel_standing_envs = 0.0
 @configclass
 class Go2FlatAgentCfg(BaseAgentCfg):
     experiment_name: str = "go2_flat"
@@ -413,7 +472,7 @@ class Go2RoughEnvCfg(Go2FlatEnvCfg):
         # Rough terrain specific reward adjustments
         self.reward.track_lin_vel_xy_exp.weight = 2.5  # 降低速度跟踪权重，rough terrain更难
         self.reward.track_ang_vel_z_exp.weight  = 1.2
-        self.reward.lin_vel_z_l2.weight         = -2.0
+        # self.reward.lin_vel_z_l2.weight         = -2.0
         # self.reward.feet_slide.weight = -0.1  # 增加防滑惩罚
         # self.reward.upward.weight = 1.0  # 增加保持直立奖励
         
