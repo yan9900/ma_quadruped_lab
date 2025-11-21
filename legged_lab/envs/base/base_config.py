@@ -9,6 +9,7 @@
 # This file contains code derived from Isaac Lab Project (BSD-3-Clause license)
 # with modifications by Legged Lab Project (BSD-3-Clause license).
 
+import torch
 import math
 from dataclasses import MISSING
 
@@ -20,7 +21,7 @@ from isaaclab.utils import configclass
 
 import legged_lab.mdp as mdp
 
-
+CLIP_RANGE = (0.3, 3.)
 @configclass
 class RewardCfg:
     pass
@@ -35,6 +36,31 @@ class HeightScannerCfg:
     debug_vis: bool = False
     drift_range: tuple = (0.0, 0.0)
 
+@configclass
+class CameraCfg:
+    """Camera configuration base class - defines structure and defaults."""
+    enable_camera: bool = False
+    use_physical_asset: bool = False  # 是否使用物理USD模型
+    prim_body_name: str = MISSING
+    height: int = 60
+    width: int = 106
+    history_length: int = 2
+    update_period: float = 0.025  # 0.005*5
+    debug_vis: bool = False
+    data_types: list = None  # 在 scene.py 设置默认值 ["distance_to_image_plane"]
+    spawn = None  # PinholeCameraCfg类型，在具体环境配置中设置
+    offset = None  # OffsetCfg类型，在具体环境配置中设置
+    
+    @configclass
+    class OffsetCfg:
+        """Offset configuration for camera."""
+        pos: tuple = (0.0, 0.0, 0.0)
+        rot: tuple = (1.0, 0.0, 0.0, 0.0)  # 默认四元数 (w, x, y, z)
+        convention: str = MISSING # ["ros", "world", "opengl"]
+    
+@configclass
+class RadarCfg:
+    pass
 
 @configclass
 class BaseSceneCfg:
@@ -43,10 +69,11 @@ class BaseSceneCfg:
     num_envs: int = 4096
     env_spacing: float = 2.5
     robot: ArticulationCfg = MISSING
-    terrain_type: str = MISSING
+    terrain_type: str = MISSING #plane or generator
     terrain_generator: TerrainGeneratorCfg = None
     max_init_terrain_level: int = 5
     height_scanner: HeightScannerCfg = HeightScannerCfg()
+    camera: CameraCfg = CameraCfg()
 
 
 @configclass
@@ -68,6 +95,7 @@ class ObsScalesCfg:
     joint_vel: float = 1.0
     actions: float = 1.0
     height_scan: float = 1.0
+    camera: float = 1.0
 
 
 @configclass
@@ -104,6 +132,7 @@ class NoiseScalesCfg:
     joint_pos: float = 0.01
     joint_vel: float = 1.5
     height_scan: float = 0.1
+    camera: float = 0.05
 
 
 @configclass

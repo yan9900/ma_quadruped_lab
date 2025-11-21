@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import math
-from sklearn import base
 import torch
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers.scene_entity_cfg import SceneEntityCfg
 from isaaclab.utils import configclass
+import isaaclab.sim as sim_utils
+from isaaclab.utils.math import quat_from_euler_xyz, quat_mul
 
 import legged_lab.mdp as mdp
 from legged_lab.envs.base.base_env import BaseEnv
@@ -19,12 +20,15 @@ from legged_lab.envs.base.base_env_config import (
     RewardCfg,
     RobotCfg,
     SimCfg,
+    CameraCfg,
 )
 from legged_lab.terrains import GRAVEL_TERRAINS_CFG, ROUGH_TERRAINS_CFG
+from legged_lab.terrains.terrain_generator_cfg import CLIFF_DETECTION_TERRAINS_CFG
 
 # --- Constants for Go2 robot ---
 BASE_LINK_NAME = "base"
 FOOT_REGEX = r".*_foot"
+CLIP_RANGE = (0.3, 3.0)  # 相机剪切范围
 
 
 from legged_lab.assets.unitree import UNITREE_GO2_CFG as GO2_CFG
@@ -238,7 +242,7 @@ class Go2FallRecoveryEnv(BaseEnv):
             critic_obs_components.insert(1, height_scan)  # Insert after proprioceptive_obs
             
         critic_obs = torch.cat(critic_obs_components, dim=-1)  # Total: R^90 (without height scan)
-        # print(actor_obs.shape, critic_obs.shape)
+        print(actor_obs.shape, critic_obs.shape)
         # print("action", action.shape, action)
         return actor_obs, critic_obs
 
@@ -263,7 +267,6 @@ class Go2FallRecoveryAgentCfg(BaseAgentCfg):
             "critic": ["critic"]      # Critic使用env返回的"critic"观测
         }
 
-# ========================================================================
 # =========================
 # Original GO2 Configurations (for compatibility)
 # =========================
@@ -498,3 +501,92 @@ class Go2RoughAgentCfg(BaseAgentCfg):
             "policy": ["policy"],     # Actor使用env返回的"policy"观测
             "critic": ["critic"]      # Critic使用env返回的"critic"观测
         }
+
+# =========================
+# Data Collection Configuration
+# =========================
+@configclass
+class Go2DataCollectionEnvCfg(BaseEnvCfg):
+    """Go2 environment configuration for data collection with camera"""
+    # __init__中只能完成简单赋值，如果有复杂的计算需要放在__post_init__中
+    def __post_init__(self):
+        super().__post_init__()
+        
+        # 基础环境配置
+        self.scene.robot = GO2_CFG
+        self.scene.terrain_type = "generator"  
+        self.scene.terrain_generator = CLIFF_DETECTION_TERRAINS_CFG  
+        self.scene.max_episode_length_s = 10.0  # 数据收集时间
+        
+        # enable camera
+        self.scene.camera.enable_camera = True
+        self.scene.camera.use_physical_asset = True  # 是否使用物理USD模型
+        self.scene.camera.prim_body_name = "base"  # 如果没有启用usd模型，则绑定到base，否则绑定到相机自身
+        self.scene.camera.height = 60  # 图像高度
+        self.scene.camera.width = 106   # 图像宽度
+        self.scene.camera.history_length = 2  # 历史长度
+        self.scene.camera.update_period = 0.025  # 40 FPS (0.005*5)
+        self.scene.camera.debug_vis = True  # 可视化调试
+        self.scene.camera.data_types = ["distance_to_image_plane"]  #深度
+        
+        # 相机硬件配置
+        self.scene.camera.spawn=sim_utils.PinholeCameraCfg(
+            focal_length=24.0, 
+            focus_distance=400.0, 
+            horizontal_aperture=20.955,
+            clipping_range=CLIP_RANGE
+        )
+        if self.scene.camera.use_physical_asset:
+            self.scene.camera.offset = CameraCfg.OffsetCfg(
+                pos=(0.0, 0.0, 0.0), 
+                rot=torch.as_tensor([1.0, 0.0, 0.0, 0.0]), # wxyz
+                convention="ros"
+            )
+        else:
+            euler_angles = torch.tensor([180.0, 70.0, -90.0])
+            euler_rad = torch.deg2rad(euler_angles)
+            base_quat = quat_from_euler_xyz(*tuple(euler_rad))
+            flip_vector = torch.tensor([1.0, 1.0, 1.0, -1.0])
+            final_quat = torch.tensor(base_quat) * flip_vector
+            
+            self.scene.camera.offset = CameraCfg.OffsetCfg(
+                pos=(0.33, 0.0, 0.08), 
+                rot=final_quat, 
+                convention="ros"
+            )
+            
+        # Height Scanner (可选，用于地形信息)
+        self.scene.height_scanner.enable_height_scan = False
+        self.scene.height_scanner.prim_body_name = BASE_LINK_NAME
+        
+        # Robot配置
+        self.robot.feet_body_names = [FOOT_REGEX]
+        self.robot.terminate_contacts_body_names = [BASE_LINK_NAME]  # 数据收集时不终止
+        
+        # 简化奖励（数据收集不需要奖励）
+        # self.reward = Go2RewardCfg()
+        self.reward = None
+        
+        
+        # 减少domain randomization（数据收集阶段保持稳定）
+        self.domain_rand.events.add_base_mass.params["asset_cfg"].body_names = [r".*base.*"]
+        
+        # 多样化的初始状态（用于数据多样性）
+        self.domain_rand.events.reset_base.params = {
+            "pose_range": {
+                "x": (0.0, 0.0), "y": (0.0, 0.0), "z": (0.0, 0.0),
+                "roll": (0.0, 0.0), "pitch": (0.0, 0.0), "yaw": (0.0, 0.0)
+            },
+            "velocity_range": {
+                "x": (0.0, 0.0), "y": (0.0, 0.0), "z": (0.0, 0.0),
+                "roll": (0.0, 0.0), "pitch": (0.0, 0.0), "yaw": (0.0, 0.0)
+            }
+        }
+        # commands variations
+        # 不考虑后退
+        self.commands.ranges.lin_vel_x = (0, 2.0)
+        self.commands.ranges.lin_vel_y = (0, 1.0) 
+        self.commands.ranges.ang_vel_z = (-2.0, 2.0)
+        self.commands.rel_standing_envs = 0.0  # %全部运动
+        
+        print(f"camera orientation (w,x,y,z): {self.scene.camera.offset.rot}")

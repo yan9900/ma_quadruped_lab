@@ -100,3 +100,41 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
         # )
     },
 )
+
+CLIFF_DETECTION_TERRAINS_CFG = TerrainGeneratorCfg(
+    curriculum=False,
+    size=(8.0, 8.0),
+    # 超出地形的缓冲地带
+    border_width=3.0,
+    
+    num_rows=10,
+    num_cols=20,
+    horizontal_scale=0.1,
+    vertical_scale=0.005,
+    slope_threshold=0.75,
+    use_cache=False,
+    sub_terrains={
+        #用pit的时候depth为正代表挖坑，为负的话整个环境上升对应高度
+        "variated_height_platform": terrain_gen.MeshBoxTerrainCfg(
+            proportion=0.6,
+            #depth为正代表挖坑
+            box_height_range=(0.2, 0.5),  
+            platform_width=4.0,  #4
+            double_box=False,
+        ),
+        "small_platform": terrain_gen.MeshBoxTerrainCfg(
+            proportion=0.2,
+            #depth为正代表挖坑
+            box_height_range=(0.5, 0.5),  
+            platform_width=4.0,  #1.5
+            double_box=False,
+        ),
+        "big_platform": terrain_gen.MeshBoxTerrainCfg(
+            proportion=0.2,
+            #depth为正代表挖坑
+            box_height_range=(0.5, 0.5),  
+            platform_width=4.0,  #6
+            double_box=False,
+        ),
+    },
+)

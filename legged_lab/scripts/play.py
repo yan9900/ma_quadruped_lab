@@ -53,6 +53,50 @@ def play():
     env_class_name = args_cli.task
     env_cfg, agent_cfg = task_registry.get_cfgs(env_class_name)
 
+    # ============================================================
+    # --enable_cameras 
+    # ============================================================
+    # if args_cli.enable_cameras:
+    #     print("[INFO] Enabling camera visualization with base_env_config settings...")
+        
+    #     # 基础相机配置
+    #     env_cfg.scene.camera.enable_camera = True
+    #     env_cfg.scene.camera.debug_vis = True  # Isaac Sim内置显示
+    #     env_cfg.scene.camera.prim_body_name = "base"  # 挂载到base链接
+    #     env_cfg.scene.camera.height = 60  # 图像高度
+    #     env_cfg.scene.camera.width = 106  # 图像宽度
+    #     env_cfg.scene.camera.history_length = 2  # 历史长度
+    #     env_cfg.scene.camera.update_period = 0.025  # 更新周期 (0.005*5)
+    #     env_cfg.scene.camera.data_types = ["distance_to_image_plane"]  # 数据类型
+        
+    #     # 相机spawn配置 (PinholeCameraCfg)
+    #     import isaaclab.sim as sim_utils
+    #     from isaaclab.utils.math import quat_from_euler_xyz
+    #     from legged_lab.envs.base.base_config import CameraCfg
+        
+    #     CLIP_RANGE = (0.3, 3.0)  # 剪切范围
+    #     env_cfg.scene.camera.spawn = sim_utils.PinholeCameraCfg(
+    #         focal_length=24.0, 
+    #         focus_distance=400.0, 
+    #         horizontal_aperture=20.955,
+    #         clipping_range=CLIP_RANGE
+    #     )
+        
+    #     # 相机offset配置 (位置和朝向)
+    #     env_cfg.scene.camera.offset = CameraCfg.OffsetCfg(
+    #         pos=(0.33, 0.0, 0.08),  # 相机位置偏移
+    #         rot=quat_from_euler_xyz(*tuple(torch.deg2rad(torch.tensor([180,30,-90])))) * torch.tensor([1.,1.,1.,-1]), 
+    #         convention="ros"  # 使用ROS坐标系约定
+    #     )
+        
+    #     print(f"[INFO] Robot camera configured:")
+    #     print(f"  Position offset: {env_cfg.scene.camera.offset.pos}")
+    #     print(f"  Resolution: {env_cfg.scene.camera.width}x{env_cfg.scene.camera.height}")
+    #     print(f"  Update period: {env_cfg.scene.camera.update_period}")
+    #     print(f"  Data types: {env_cfg.scene.camera.data_types}")
+    #     print(f"  Look for camera path: /World/envs/env_0/Robot/base/Camera")
+        
+
     # 针对Fall Recovery的特殊配置
     if "fall_recovery" in env_class_name.lower():
         print("[INFO] Configuring for Fall Recovery task...")
@@ -103,9 +147,9 @@ def play():
         # 原有的常规配置
         env_cfg.noise.add_noise = False
         env_cfg.domain_rand.events.push_robot = None
-        env_cfg.scene.max_episode_length_s = 10.0
+        env_cfg.scene.max_episode_length_s = 5.0
         env_cfg.scene.num_envs = 9 # num of robots
-        env_cfg.scene.env_spacing = 2.5
+        env_cfg.scene.env_spacing = 10
         env_cfg.commands.ranges.lin_vel_x = (1.5, 2.0)
         env_cfg.commands.ranges.lin_vel_y = (0.0, 0.0)
         env_cfg.commands.ranges.heading = (0.0, 0.0)
@@ -114,12 +158,17 @@ def play():
         print(f"current base height: {env_cfg.scene.robot.init_state.pos[2]}")
         # env_cfg.scene.terrain_generator = None
         # env_cfg.scene.terrain_type = "plane"
+        from legged_lab.terrains import CLIFF_DETECTION_TERRAINS_CFG
+        env_cfg.scene.terrain_type = "generator"
+        env_cfg.scene.terrain_generator = CLIFF_DETECTION_TERRAINS_CFG
+
+        
 
         if env_cfg.scene.terrain_generator is not None:
             env_cfg.scene.terrain_generator.num_rows = 3
             env_cfg.scene.terrain_generator.num_cols = 3
-            env_cfg.scene.terrain_generator.curriculum = True
-            env_cfg.scene.terrain_generator.difficulty_range = (0.1, 0.3)
+            # env_cfg.scene.terrain_generator.curriculum = True
+            # env_cfg.scene.terrain_generator.difficulty_range = (0.1, 0.3)
 
     if args_cli.num_envs is not None:
         env_cfg.scene.num_envs = args_cli.num_envs
@@ -139,6 +188,7 @@ def play():
     runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
     runner.load(resume_path, load_optimizer=False)
 
+    # pi(a|s) -> a = policy(s) 这里的s是指观测 obs_dict
     policy = runner.get_inference_policy(device=env.device)
 
     # Note: rsl_rl 3.0.0 does not support export_policy_as_jit/onnx
@@ -154,6 +204,26 @@ def play():
     obs_dict = env.get_observations()
     # 使用policy观测作为策略输入
     obs = obs_dict["policy"]
+
+    # 打印观测维度信息
+    print(f"\n[INFO] Observation dimensions:")
+    print(f"  Actor (policy) obs shape: {obs_dict['policy'].shape}")
+    if "critic" in obs_dict:
+        print(f"  Critic obs shape: {obs_dict['critic'].shape}")
+    else:
+        print(f"  Critic obs: Not available (using same as policy)")
+    print(f"  Total obs keys: {list(obs_dict.keys())}")
+    print(f"  Actor obs dimension: {obs_dict['policy'].shape[1]} per environment")
+    if "critic" in obs_dict:
+        print(f"  Critic obs dimension: {obs_dict['critic'].shape[1]} per environment")
+    
+    # 打印相机信息
+    if args_cli.enable_cameras:
+        print(f"\n[INFO] Camera Configuration:")
+        print(f"  Resolution: {env_cfg.scene.camera.width}x{env_cfg.scene.camera.height}")
+        print(f"  Debug visualization: Enabled (in Isaac Sim window)")
+        print(f"  Data types: {env_cfg.scene.camera.data_types}")
+    print()
 
     # 为Fall Recovery任务添加统计信息和特殊处理
     if "fall_recovery" in env_class_name.lower():

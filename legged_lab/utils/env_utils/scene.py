@@ -15,11 +15,14 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg, patterns
+import isaaclab.sim as sim_utils
 from isaaclab.terrains.terrain_importer_cfg import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
 
-from legged_lab.terrains.ray_caster_cfg import RayCasterCfg
+from legged_lab.sensors.ray_caster import RayCasterCfg
+from legged_lab.sensors.camera import CAMERA_USD_CFG, CameraCfg
+
 
 if TYPE_CHECKING:
     from legged_lab.envs.base.base_env_config import BaseSceneCfg
@@ -88,4 +91,35 @@ class SceneCfg(InteractiveSceneCfg):
                 mesh_prim_paths=["/World/ground"],
                 update_period=step_dt,
                 drift_range=config.height_scanner.drift_range,
+            )
+
+        if config.camera.enable_camera:
+            # 如果启用物理asset，先创建USD模型
+            # 这一步把d435的usd添加到了robot/prim_body_name/d435下，也就是捆绑了robot和d435的物理模型
+            # 对于一个有实体的传感器来说，有两个path，即物理模型的prim_path和虚拟的sensor_path,二者路径不能相同
+            if getattr(config.camera, 'use_physical_asset', False):
+                # 使用真实的D435 USD文件
+                self.d435_camera_asset = CAMERA_USD_CFG.replace(
+                    prim_path="{ENV_REGEX_NS}/Robot/" + config.camera.prim_body_name + "/d435"
+                )
+                print(f"[DEBUG] Creating D435 USD asset at: {config.camera.prim_body_name}/d435")
+                # sensor应该在USD资产内部，添加子路径避免冲突
+                sensor_path = config.camera.prim_body_name + "/d435/front_cam"
+            else:
+                sensor_path = config.camera.prim_body_name + "/front_cam"
+            
+            # 创建相机sensor
+            print(f"[DEBUG] Creating camera sensor with name: front_camera")
+            print(f"[DEBUG] Camera sensor path: {'{ENV_REGEX_NS}/Robot/' + sensor_path}")
+            # 实例化
+            self.front_camera = CameraCfg(
+                prim_path="{ENV_REGEX_NS}/Robot/" + sensor_path,
+                height=config.camera.height,
+                width=config.camera.width,
+                history_length=config.camera.history_length,
+                update_period=config.camera.update_period,
+                data_types=config.camera.data_types or ["distance_to_image_plane"],
+                spawn=config.camera.spawn,
+                offset=config.camera.offset,
+                debug_vis=config.camera.debug_vis,
             )

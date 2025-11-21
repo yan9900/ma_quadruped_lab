@@ -10,6 +10,7 @@
 # with modifications by Legged Lab Project (BSD-3-Clause license).
 
 
+
 from legged_lab.envs.base.base_env import BaseEnv
 from legged_lab.envs.base.base_env_config import BaseAgentCfg, BaseEnvCfg
 from legged_lab.envs.g1.g1_config import (
@@ -40,6 +41,7 @@ from legged_lab.envs.go2.go2_config import (
     Go2FlatEnvCfg,
     Go2RoughAgentCfg,
     Go2RoughEnvCfg,
+    Go2DataCollectionEnvCfg,
 )
 from legged_lab.utils.task_registry import task_registry
 
@@ -53,3 +55,5 @@ task_registry.register("gr2_rough", BaseEnv, GR2RoughEnvCfg(), GR2RoughAgentCfg(
 task_registry.register("go2_flat", BaseEnv, Go2FlatEnvCfg(), Go2FlatAgentCfg())
 task_registry.register("go2_rough", BaseEnv, Go2RoughEnvCfg(), Go2RoughAgentCfg())
 task_registry.register("go2_fall_recovery", Go2FallRecoveryEnv, Go2FallRecoveryFlatEnvCfg(), Go2FallRecoveryAgentCfg())
+# go2 data collection只是收集数据，没有对应的agent配置
+task_registry.register("go2_data_collection", BaseEnv, Go2DataCollectionEnvCfg(), Go2FlatAgentCfg())

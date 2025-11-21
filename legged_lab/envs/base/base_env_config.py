@@ -9,6 +9,8 @@
 # This file contains code derived from Isaac Lab Project (BSD-3-Clause license)
 # with modifications by Legged Lab Project (BSD-3-Clause license).
 
+import torch
+from gc import enable
 import math
 from dataclasses import MISSING
 
@@ -22,7 +24,8 @@ from isaaclab_rl.rsl_rl import (  # noqa:F401
     RslRlRndCfg,
     RslRlSymmetryCfg,
 )
-
+import isaaclab.sim as sim_utils
+from isaaclab.utils.math import quat_from_euler_xyz
 import legged_lab.mdp as mdp
 
 from .base_config import (
@@ -33,6 +36,7 @@ from .base_config import (
     DomainRandCfg,
     EventCfg,
     HeightScannerCfg,
+    CameraCfg,
     NoiseCfg,
     NoiseScalesCfg,
     NormalizationCfg,
@@ -43,7 +47,7 @@ from .base_config import (
     SimCfg,
 )
 
-
+CLIP_RANGE = (0.3, 3.)
 @configclass
 class BaseEnvCfg:
     device: str = "cuda:0"
@@ -55,14 +59,8 @@ class BaseEnvCfg:
         terrain_type=MISSING,
         terrain_generator=None,
         max_init_terrain_level=5,
-        height_scanner=HeightScannerCfg(
-            enable_height_scan=False,
-            prim_body_name=MISSING,
-            resolution=0.1,
-            size=(1.6, 1.0),
-            debug_vis=False,
-            drift_range=(0.0, 0.0),  # (0.3, 0.3)
-        ),
+        height_scanner=HeightScannerCfg(),  # 使用默认值
+        camera=CameraCfg(),  # 使用默认值
     )
     robot: RobotCfg = RobotCfg(
         actor_obs_history_length=10,
@@ -82,6 +80,7 @@ class BaseEnvCfg:
             joint_vel=1.0,
             actions=1.0,
             height_scan=1.0,
+            camera=1.0,
         ),
         clip_observations=100.0,
         clip_actions=100.0,
@@ -106,6 +105,7 @@ class BaseEnvCfg:
             joint_pos=0.01,
             joint_vel=1.5,
             height_scan=0.1,
+            camera=0.05,
         ),
     )
     domain_rand: DomainRandCfg = DomainRandCfg(

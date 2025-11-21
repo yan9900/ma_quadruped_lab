@@ -18,8 +18,12 @@ from isaaclab.envs.mdp.commands import UniformVelocityCommand, UniformVelocityCo
 from isaaclab.managers import EventManager, RewardManager
 from isaaclab.managers.scene_entity_cfg import SceneEntityCfg
 from isaaclab.scene import InteractiveScene
-from isaaclab.sensors import ContactSensor, RayCaster
+# import RayCaster from isaaclab.sensors if you want to use unmodified version
+from isaaclab.sensors import ContactSensor
 from isaaclab.sim import PhysxCfg, SimulationContext
+# self defined sensors
+from legged_lab.sensors.camera import Camera
+from legged_lab.sensors.ray_caster import RayCaster
 from isaaclab.utils.buffers import CircularBuffer, DelayBuffer
 from rsl_rl.env import VecEnv
 from tensordict import TensorDict
@@ -64,6 +68,9 @@ class BaseEnv(VecEnv):
         self.contact_sensor: ContactSensor = self.scene.sensors["contact_sensor"]
         if self.cfg.scene.height_scanner.enable_height_scan:
             self.height_scanner: RayCaster = self.scene.sensors["height_scanner"]
+        if self.cfg.scene.camera.enable_camera:
+            # 使用 Isaac Lab 的 Camera 类
+            self.front_camera: Camera = self.scene.sensors["front_camera"]
 
         command_cfg = UniformVelocityCommandCfg(
             asset_name="robot",
@@ -145,12 +152,12 @@ class BaseEnv(VecEnv):
     # 计算当前观测值
     # actor_obs包括
     """
-    root的角速度
-    root的投影重力
-    机器人命令 来自 command generator
-    joint的位置 做差的形式，减去默认关节位置
-    joint的速度 做差的形式，减去默认关节速度
-    机器人的最新动作
+    root的角速度 3
+    root的投影重力 3
+    机器人命令 来自 command generator 3
+    joint的位置 做差的形式，减去默认关节位置 12
+    joint的速度 做差的形式，减去默认关节速度 12
+    机器人的最新动作 12
     """
     def compute_current_observations(self):
         robot = self.robot
@@ -176,7 +183,7 @@ class BaseEnv(VecEnv):
         )
 
         # critic_obs比actor_obs多了 
-        # root的线速度 和 feet_contact
+        # root的线速度 和 feet_contact 3 + 4
         # feet_contact为bool类型，表示脚是否接触地面
         # net_contact_forces的形状为[num_envs, history_length, num_bodies, 3]
         # torch.norm的形状为[num_envs, history_length, num_feet]
@@ -243,7 +250,11 @@ class BaseEnv(VecEnv):
         # 后续会通过 .update() 方法往里面添加统计信息（如地形等级、奖励等）
         self.extras["log"] = dict()
         if self.cfg.scene.terrain_generator is not None:
-            if self.cfg.scene.terrain_generator.curriculum:
+            # 检查是否启用随机地形spawn
+            if getattr(self.cfg.scene, 'enable_random_terrain_spawn', False):
+                terrain_extras = self.randomize_terrain_spawn(env_ids)
+                self.extras["log"].update(terrain_extras)
+            elif self.cfg.scene.terrain_generator.curriculum:
                 terrain_levels = self.update_terrain_levels(env_ids)
                 self.extras["log"].update(terrain_levels)
 
@@ -392,7 +403,7 @@ class BaseEnv(VecEnv):
     def update_terrain_levels(self, env_ids):
         # xy平面上，机器人当前位置到当前地形中心点的距离
         distance = torch.norm(self.robot.data.root_pos_w[env_ids, :2] - self.scene.env_origins[env_ids, :2], dim=1)
-        # 这里的“升高/降低”不是指 z 方向的物理高度，而是指 terrain curriculum（地形课程学习）中，
+        # 这里的"升高/降低"不是指 z 方向的物理高度，而是指 terrain curriculum（地形课程学习）中，
         # 机器人被分配到更难/更易的地形区域
         # 行走超过地形宽度的一半，就提升地形难度等级
         move_up = distance > self.scene.terrain.cfg.terrain_generator.size[0] / 2
