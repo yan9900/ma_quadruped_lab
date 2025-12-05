@@ -297,11 +297,16 @@ class BaseEnv(VecEnv):
         # 每个环境步执行 decimation 次物理仿真步，每次用同一个动作。
         # step_dt = self.cfg.sim.dt * self.cfg.sim.decimation
         # where self.cfg.sim.dt 是物理仿真的时间步长(self.physics_dt)
-        for _ in range(self.cfg.sim.decimation):
+        # 检查是否启用了相机 - 如果启用，需要渲染才能更新相机数据
+        has_camera = hasattr(self.cfg.scene, 'camera') and getattr(self.cfg.scene.camera, 'enable_camera', False)
+        
+        for i in range(self.cfg.sim.decimation):
             self.sim_step_counter += 1
             self.robot.set_joint_position_target(processed_actions)
             self.scene.write_data_to_sim()
-            self.sim.step(render=False)
+            # 最后一个 decimation 步需要渲染以更新相机数据
+            need_render = has_camera and (i == self.cfg.sim.decimation - 1)
+            self.sim.step(render=need_render)
             self.scene.update(dt=self.physics_dt)
 
         if not self.headless:

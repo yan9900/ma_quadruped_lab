@@ -52,51 +52,7 @@ def play():
 
     env_class_name = args_cli.task
     env_cfg, agent_cfg = task_registry.get_cfgs(env_class_name)
-
-    # ============================================================
-    # --enable_cameras 
-    # ============================================================
-    # if args_cli.enable_cameras:
-    #     print("[INFO] Enabling camera visualization with base_env_config settings...")
         
-    #     # 基础相机配置
-    #     env_cfg.scene.camera.enable_camera = True
-    #     env_cfg.scene.camera.debug_vis = True  # Isaac Sim内置显示
-    #     env_cfg.scene.camera.prim_body_name = "base"  # 挂载到base链接
-    #     env_cfg.scene.camera.height = 60  # 图像高度
-    #     env_cfg.scene.camera.width = 106  # 图像宽度
-    #     env_cfg.scene.camera.history_length = 2  # 历史长度
-    #     env_cfg.scene.camera.update_period = 0.025  # 更新周期 (0.005*5)
-    #     env_cfg.scene.camera.data_types = ["distance_to_image_plane"]  # 数据类型
-        
-    #     # 相机spawn配置 (PinholeCameraCfg)
-    #     import isaaclab.sim as sim_utils
-    #     from isaaclab.utils.math import quat_from_euler_xyz
-    #     from legged_lab.envs.base.base_config import CameraCfg
-        
-    #     CLIP_RANGE = (0.3, 3.0)  # 剪切范围
-    #     env_cfg.scene.camera.spawn = sim_utils.PinholeCameraCfg(
-    #         focal_length=24.0, 
-    #         focus_distance=400.0, 
-    #         horizontal_aperture=20.955,
-    #         clipping_range=CLIP_RANGE
-    #     )
-        
-    #     # 相机offset配置 (位置和朝向)
-    #     env_cfg.scene.camera.offset = CameraCfg.OffsetCfg(
-    #         pos=(0.33, 0.0, 0.08),  # 相机位置偏移
-    #         rot=quat_from_euler_xyz(*tuple(torch.deg2rad(torch.tensor([180,30,-90])))) * torch.tensor([1.,1.,1.,-1]), 
-    #         convention="ros"  # 使用ROS坐标系约定
-    #     )
-        
-    #     print(f"[INFO] Robot camera configured:")
-    #     print(f"  Position offset: {env_cfg.scene.camera.offset.pos}")
-    #     print(f"  Resolution: {env_cfg.scene.camera.width}x{env_cfg.scene.camera.height}")
-    #     print(f"  Update period: {env_cfg.scene.camera.update_period}")
-    #     print(f"  Data types: {env_cfg.scene.camera.data_types}")
-    #     print(f"  Look for camera path: /World/envs/env_0/Robot/base/Camera")
-        
-
     # 针对Fall Recovery的特殊配置
     if "fall_recovery" in env_class_name.lower():
         print("[INFO] Configuring for Fall Recovery task...")

@@ -139,6 +139,14 @@ def collect_data():
         raise
     
     # 数据收集器类
+    # 一个traj - 一个episode
+    # total traj = num_envs * num_episodes
+    # traj的思路是，通过method生成一条traj，再循环num_episodes次
+    # go2可以多个环境并行
+    # 一条traj包含:
+    # obs: {'image': [], 'state': [], 'priv_state': []}
+    # actions: []
+    # dones: []
     class Go2DataCollector:
         def __init__(self, env: BaseEnv, policy=None):
             self.env = env
@@ -163,7 +171,9 @@ def collect_data():
                 self.env_episodes_collected.append(0)
                 self.env_current_step.append(0)
                 self.env_episode_complete.append(False)
-            
+        
+        # reset的时候需要重置哪些东西？
+        # go2回到初始状态，容器清空，step计数归零    
         def reset_episode(self, env_id=None):
             """重置episode数据收集"""
             if env_id is None:
@@ -205,6 +215,7 @@ def collect_data():
                     
                     env_ids = torch.tensor([env_id], device=self.env.device)
                     self.env.reset(env_ids)
+        
         def collect_current_observations(self) -> Dict[str, Any]:
             """收集当前时刻的观测数据，格式与你提供的obs结构一致"""
             

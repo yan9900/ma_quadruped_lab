@@ -522,8 +522,8 @@ class Go2DataCollectionEnvCfg(BaseEnvCfg):
         self.scene.camera.enable_camera = True
         self.scene.camera.use_physical_asset = True  # 是否使用物理USD模型
         self.scene.camera.prim_body_name = "base"  # 如果没有启用usd模型，则绑定到base，否则绑定到相机自身
-        self.scene.camera.height = 60  # 图像高度
-        self.scene.camera.width = 106   # 图像宽度
+        self.scene.camera.height = 64  # 图像高度
+        self.scene.camera.width = 64   # 图像宽度
         self.scene.camera.history_length = 2  # 历史长度
         self.scene.camera.update_period = 0.025  # 40 FPS (0.005*5)
         self.scene.camera.debug_vis = True  # 可视化调试
@@ -569,6 +569,7 @@ class Go2DataCollectionEnvCfg(BaseEnvCfg):
         
         
         # 减少domain randomization（数据收集阶段保持稳定）
+        # 注意：Head 质量很小，不要添加大范围质量随机化，否则会导致 PhysX 惯性张量错误
         self.domain_rand.events.add_base_mass.params["asset_cfg"].body_names = [r".*base.*"]
         
         # 多样化的初始状态（用于数据多样性）
