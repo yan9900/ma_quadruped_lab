@@ -11,3 +11,4 @@
 
 
 from .terrain_generator_cfg import *
+from .hf_increasing_slope import HfIncreasingSlopeTerrainCfg, increasing_slope_terrain

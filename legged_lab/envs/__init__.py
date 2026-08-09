@@ -42,6 +42,7 @@ from legged_lab.envs.go2.go2_config import (
     Go2RoughAgentCfg,
     Go2RoughEnvCfg,
     Go2DataCollectionEnvCfg,
+    Go2DataEvaluationEnvCfg,
 )
 from legged_lab.utils.task_registry import task_registry
 
@@ -57,3 +58,4 @@ task_registry.register("go2_rough", BaseEnv, Go2RoughEnvCfg(), Go2RoughAgentCfg(
 task_registry.register("go2_fall_recovery", Go2FallRecoveryEnv, Go2FallRecoveryFlatEnvCfg(), Go2FallRecoveryAgentCfg())
 # go2 data collection只是收集数据，没有对应的agent配置
 task_registry.register("go2_data_collection", BaseEnv, Go2DataCollectionEnvCfg(), Go2FlatAgentCfg())
+task_registry.register("go2_data_evaluation", BaseEnv, Go2DataEvaluationEnvCfg(), Go2FlatAgentCfg())

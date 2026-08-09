@@ -102,29 +102,40 @@ def play():
     else:
         # 原有的常规配置
         env_cfg.noise.add_noise = False
-        env_cfg.domain_rand.events.push_robot = None
-        env_cfg.scene.max_episode_length_s = 5.0
-        env_cfg.scene.num_envs = 9 # num of robots
-        env_cfg.scene.env_spacing = 10
-        env_cfg.commands.ranges.lin_vel_x = (1.5, 2.0)
-        env_cfg.commands.ranges.lin_vel_y = (0.0, 0.0)
-        env_cfg.commands.ranges.heading = (0.0, 0.0)
-        env_cfg.scene.height_scanner.drift_range = (0.0, 0.0)
-        env_cfg.commands.rel_standing_envs = 0.0  # all envs have moving commands
+        # env_cfg.domain_rand.events.push_robot = None  # 保留go2_config的push_robot配置
+        # env_cfg.scene.max_episode_length_s = 5.0  # 保留go2_config的episode_length配置
+        # env_cfg.scene.num_envs = 9 # num of robots
+        # env_cfg.scene.env_spacing = 10
+        # env_cfg.commands.ranges.lin_vel_x = (0.5, 2.5)
+        # env_cfg.commands.ranges.lin_vel_y = (-0.5, 0.5)
+        # env_cfg.commands.ranges.heading = (-1.57, 1.57)
+        # env_cfg.scene.height_scanner.drift_range = (0.0, 0.0)
+        # env_cfg.commands.rel_standing_envs = 0.0  # all envs have moving commands
         print(f"current base height: {env_cfg.scene.robot.init_state.pos[2]}")
+        # 注释掉强制覆盖地形的代码，使用各任务自己配置的地形
         # env_cfg.scene.terrain_generator = None
         # env_cfg.scene.terrain_type = "plane"
-        from legged_lab.terrains import CLIFF_DETECTION_TERRAINS_CFG
-        env_cfg.scene.terrain_type = "generator"
-        env_cfg.scene.terrain_generator = CLIFF_DETECTION_TERRAINS_CFG
+        # from legged_lab.terrains import CLIFF_DETECTION_TERRAINS_CFG
+        # env_cfg.scene.terrain_type = "generator"
+        # env_cfg.scene.terrain_generator = CLIFF_DETECTION_TERRAINS_CFG
+        # env_cfg.domain_rand.events.reset_base.params = {
+        #     "pose_range": {
+        #         "x": (-1.0, 2.0), "y": (-1.0, 1.0), "z": (0.0, 0.05),
+        #         "roll": (0.0, 0.0), "pitch": (0.0, 0.0), "yaw": (-3.14, 3.14)
+        #     },
+        #     "velocity_range": {
+        #         "x": (-0.5, 0.5), "y": (-0.5, 0.5), "z": (0.0, 0.0),
+        #         "roll": (0.0, 0.0), "pitch": (0.0, 0.0), "yaw": (-0.2, 0.2)
+        #     }
+        # }
 
         
 
-        if env_cfg.scene.terrain_generator is not None:
-            env_cfg.scene.terrain_generator.num_rows = 3
-            env_cfg.scene.terrain_generator.num_cols = 3
-            # env_cfg.scene.terrain_generator.curriculum = True
-            # env_cfg.scene.terrain_generator.difficulty_range = (0.1, 0.3)
+        # if env_cfg.scene.terrain_generator is not None:
+        #     env_cfg.scene.terrain_generator.num_rows = 3
+        #     env_cfg.scene.terrain_generator.num_cols = 3
+        #     # env_cfg.scene.terrain_generator.curriculum = True
+        #     # env_cfg.scene.terrain_generator.difficulty_range = (0.1, 0.3)
 
     if args_cli.num_envs is not None:
         env_cfg.scene.num_envs = args_cli.num_envs

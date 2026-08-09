@@ -1,0 +1,76 @@
+# Python bytecode and tool caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Local Python environments
+.conda/
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# Packaging and build outputs
+build/
+dist/
+*.egg-info/
+
+# Editor, assistant, and OS-local files
+.idea/
+.vscode/
+.claude/
+.agents/
+.codex/
+.DS_Store
+Thumbs.db
+
+# Temporary and backup files
+*.bak
+*.backup
+*.orig
+*.rej
+*.swp
+*.swo
+*.tmp
+*~
+
+# Runtime logs and experiment trackers
+logs/
+wandb/
+outputs/
+*.log
+
+# Locally generated datasets and experiment outputs
+data/
+results/
+videos/
+
+# Simulator and GPU caches
+shadercache/
+nv_shadercache/
+
+# Generated figures currently written to the package root
+/comparison_push_*.png
+/coverage_visualization*.png
+
+# Scripts kept locally but excluded from Git
+/scripts/analyze/
+/scripts/baselines/
+/scripts/to_ignore/
+
+# Exported policies and checkpoints
+*.ckpt
+*.jit
+*.onnx
+*.pth
+*.pt
+
+docs/

@@ -47,14 +47,10 @@ class SceneCfg(InteractiveSceneCfg):
             physics_material=sim_utils.RigidBodyMaterialCfg(
                 friction_combine_mode="multiply",
                 restitution_combine_mode="multiply",
-                static_friction=1.0,
-                dynamic_friction=1.0,
+                static_friction=1.0, #half ce-like surface
+                dynamic_friction=1.0, #half ce-like surface
             ),
-            visual_material=sim_utils.MdlFileCfg(
-                mdl_path=f"{ISAACLAB_NUCLEUS_DIR}/Materials/TilesMarbleSpiderWhiteBrickBondHoned/TilesMarbleSpiderWhiteBrickBondHoned.mdl",
-                project_uvw=True,
-                texture_scale=(0.25, 0.25),
-            ),
+            visual_material=None,  # 不绑定 MDL 材质，使 color_scheme 的 vertex color 生效
             debug_vis=False,
         )
 

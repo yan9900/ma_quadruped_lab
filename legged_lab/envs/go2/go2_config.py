@@ -10,6 +10,7 @@ from isaaclab.utils.math import quat_from_euler_xyz, quat_mul
 
 import legged_lab.mdp as mdp
 from legged_lab.envs.base.base_env import BaseEnv
+from isaaclab.managers import EventTermCfg as EventTerm
 from legged_lab.envs.base.base_env_config import (
     BaseAgentCfg,
     BaseEnvCfg,
@@ -23,7 +24,7 @@ from legged_lab.envs.base.base_env_config import (
     CameraCfg,
 )
 from legged_lab.terrains import GRAVEL_TERRAINS_CFG, ROUGH_TERRAINS_CFG
-from legged_lab.terrains.terrain_generator_cfg import CLIFF_DETECTION_TERRAINS_CFG
+from legged_lab.terrains.terrain_generator_cfg import CLIFF_DETECTION_TERRAINS_CFG, CLIFF_DETECTION_TERRAINS_LOW_SPEED_CFG, CLIFF_EVALUATION_TERRAINS_CFG, FLAT_MESH_TERRAINS_CFG, RING_UNEVEN_TERRAINS_CFG, INCREASING_SLOPE_TERRAINS_CFG
 
 # --- Constants for Go2 robot ---
 BASE_LINK_NAME = "base"
@@ -275,8 +276,8 @@ class Go2RewardCfg:
     """Basic GO2 reward configuration"""
     #===================================kinematic rewards===================================
     # Velocity Tracking Rewards
-    track_lin_vel_xy_exp = RewTerm(func=mdp.track_lin_vel_xy_base_frame_exp, weight=3.0, params={"std": 0.5})
-    track_ang_vel_z_exp = RewTerm(func=mdp.track_ang_vel_z_base_frame_exp, weight=1.5, params={"std": 0.5}) 
+    track_lin_vel_xy_exp = RewTerm(func=mdp.track_lin_vel_xy_base_frame_exp, weight=3.0, params={"std": 0.5}) #3
+    track_ang_vel_z_exp = RewTerm(func=mdp.track_ang_vel_z_base_frame_exp, weight=1.5, params={"std": 0.5}) #1.5
 
     # Root Penalties
     lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.0)
@@ -285,9 +286,9 @@ class Go2RewardCfg:
     upward = RewTerm(func=mdp.upward, weight=1.0)
     # newly added
     # flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-2.5)
-    base_height_l2 = RewTerm(func=mdp.base_height_l2, weight=-5.0, 
+    base_height_l2 = RewTerm(func=mdp.base_height_l2, weight=-1.0, #-0.0 -5
                             #  params={"target_height": 0.33, "sensor_cfg": SceneEntityCfg("height_scanner", body_names=[BASE_LINK_NAME])})
-                             params={"target_height": 0.5})
+                             params={"target_height": 0.3})
 
     #===================================joint rewards===================================
     # Joint Penalties
@@ -297,13 +298,14 @@ class Go2RewardCfg:
     joint_pos_limits    = RewTerm(func=mdp.joint_pos_limits, weight=-5.0)
     joint_vel_limits    = RewTerm(func=mdp.joint_vel_limits, weight=0.0)
     joint_power         = RewTerm(func=mdp.energy,           weight=-2.0e-5)  # energy == |tau * qdot|
-    joint_pos_penalty   = RewTerm(func=mdp.joint_deviation_l1, weight=-1.0,
+    joint_pos_penalty   = RewTerm(func=mdp.joint_deviation_l1, weight=0.0, #-1.0
                                 #   params={"asset_cfg": SceneEntityCfg(name="robot", body_names=[r".*_hip.*"])})   # 用默认位形的 L1 偏差作形状正则
                                   params={"asset_cfg": SceneEntityCfg(name="robot", joint_names=[r".*_hip_joint"])})   # 用默认位形的 L1 偏差作形状正则, 只惩罚hip关节
     
     #===================================action smoothness===================================
     # Action Penalties
     action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
+    action_smoothing = RewTerm(func=mdp.action_smoothing, weight=-0.01)
     
     #===================================contact rewards===================================
     undesired_contacts = RewTerm(func=mdp.undesired_contacts, weight=-1.0, 
@@ -314,11 +316,11 @@ class Go2RewardCfg:
     # ===================================gait related rewards===================================
     # # ---- Feet behavior (quadruped) ----
     feet_air_time = RewTerm(
-        func=mdp.feet_air_time, weight=0.1,
+        func=mdp.feet_air_time, weight=0.0, #0.1
         params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=[FOOT_REGEX]), "threshold": 0.5}
     )
     feet_air_time_variance = RewTerm(
-        func=mdp.feet_air_time_variance, weight=-1.0,
+        func=mdp.feet_air_time_variance, weight=0.0, #-1.0
         params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=[FOOT_REGEX]), "threshold": 0.5}
     )
     feet_contact = RewTerm(
@@ -326,7 +328,8 @@ class Go2RewardCfg:
         params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=[FOOT_REGEX]), "threshold": 1.0}
     )
     feet_slide = RewTerm(
-        func=mdp.feet_slide_body_frame, weight=-0.1,
+        func=mdp.feet_slide,  # world-frame: foot vel ≈ 0 when planted → correct anti-slip signal
+        weight=-0.1,          # was -0.1 with body-frame version (which didn't penalise actual slipping)
         params={
             "sensor_cfg": SceneEntityCfg("contact_sensor", body_names=[FOOT_REGEX]),
             "asset_cfg":  SceneEntityCfg("robot",          body_names=[FOOT_REGEX]),
@@ -339,7 +342,7 @@ class Go2RewardCfg:
                 "target_height": 0.05,"tanh_mult":2.0}
     )
     feet_height_body = RewTerm(
-        func=mdp.feet_height_body, weight=-5.0,
+        func=mdp.feet_height_body, weight=-0.01, #-5
         params={"sensor_cfg": SceneEntityCfg("contact_sensor", body_names=[FOOT_REGEX]),
                 "asset_cfg":  SceneEntityCfg("robot",          body_names=[FOOT_REGEX]),
                 "target_height": -0.2,"tanh_mult":2.0}
@@ -361,9 +364,9 @@ class Go2RewardCfg:
             "max_err": 0.2,
             "velocity_threshold": 0.5,
             "command_threshold": 0.1,
-            # "synced_feet_pair_names": (("FL_foot", "RR_foot"), ("FR_foot", "RL_foot")), #trotting
+            "synced_feet_pair_names": (("FL_foot", "RR_foot"), ("FR_foot", "RL_foot")), #trotting
             # "synced_feet_pair_names": (("FL_foot", "FR_foot"), ("RL_foot", "RR_foot")), #bounding
-            "synced_feet_pair_names": (("FL_foot", "RL_foot"), ("FR_foot", "RR_foot")), # pacing
+            # "synced_feet_pair_names": (("FL_foot", "RL_foot"), ("FR_foot", "RR_foot")), # pacing
             "asset_cfg": SceneEntityCfg("robot"),
             "sensor_cfg": SceneEntityCfg(
                 "contact_sensor",
@@ -373,26 +376,25 @@ class Go2RewardCfg:
     )
     
     joint_mirror        = RewTerm(
-        func=mdp.joint_mirror, weight=-0.05,
+        func=mdp.joint_mirror, weight=-0.05, # -0.05
         params={"mirror_joints": [
-            # 这里建议在构建阶段把正则解析成 id 列表再传入
             # 下方为“左右对称”成对关系（示意），可据你的 URDF 实际 joint 命名调整
             # 和feet_gait的顺序一致？
             # trotting
-            # (["FL_hip_joint","FL_thigh_joint","FL_calf_joint"],
-            #  ["RR_hip_joint","RR_thigh_joint","RR_calf_joint"]),
-            # (["FR_hip_joint","FR_thigh_joint","FR_calf_joint"],
-            #  ["RL_hip_joint","RL_thigh_joint","RL_calf_joint"]),
+            (["FL_hip_joint","FL_thigh_joint","FL_calf_joint"],
+             ["RR_hip_joint","RR_thigh_joint","RR_calf_joint"]),
+            (["FR_hip_joint","FR_thigh_joint","FR_calf_joint"],
+             ["RL_hip_joint","RL_thigh_joint","RL_calf_joint"]),
             # bounding
             # (["FL_hip_joint","FL_thigh_joint","FL_calf_joint"],
             #  ["FR_hip_joint","FR_thigh_joint","FR_calf_joint"]),
             # (["RL_hip_joint","RL_thigh_joint","RL_calf_joint"],
             #  ["RR_hip_joint","RR_thigh_joint","RR_calf_joint"]),
             # pacing
-            (["FL_hip_joint","FL_thigh_joint","FL_calf_joint"],
-             ["RL_hip_joint","RL_thigh_joint","RL_calf_joint"]),
-            (["FR_hip_joint","FR_thigh_joint","FR_calf_joint"],
-             ["RR_hip_joint","RR_thigh_joint","RR_calf_joint"]),
+            # (["FL_hip_joint","FL_thigh_joint","FL_calf_joint"],
+            #  ["RL_hip_joint","RL_thigh_joint","RL_calf_joint"]),
+            # (["FR_hip_joint","FR_thigh_joint","FR_calf_joint"],
+            #  ["RR_hip_joint","RR_thigh_joint","RR_calf_joint"]),
         ]}
     )
     
@@ -412,35 +414,60 @@ class Go2FlatEnvCfg(BaseEnvCfg):
         super().__post_init__()
         self.reward = Go2RewardCfg()
         self.scene.robot = GO2_CFG
-        self.scene.terrain_type = "plane"
-        self.scene.terrain_generator = None
+        # self.scene.terrain_type = "generator"       # 使用 mesh 平地，与部署环境接触行为一致
+        # self.scene.terrain_generator = FLAT_MESH_TERRAINS_CFG
+        self.scene.terrain_type = "plane"       # 使用 mesh 平地，与部署环境接触行为一致
+
+        # =====================================================================
+        # FLAG: 加入 D435 USD 视觉模型（纯外观，无物理影响）
+        # 训练时不需要，数据收集/可视化时可打开
+        # 警告：use_physical_asset=True + enable_camera=True 会触发 Isaac Lab 给
+        # d435 prim 施加 RigidBodyAPI，导致机器人前倾——保持此处注释状态
+        # =====================================================================
+        self.scene.camera.use_physical_asset = True
+        self.scene.camera.enable_camera = False
+        self.scene.camera.prim_body_name = "base"
 
         # Height scan off in flat
         self.scene.height_scanner.enable_height_scan = False
         # 将扫描原点/体绑定到 base（如果你的 HeightScanner 需要）
         self.scene.height_scanner.prim_body_name = BASE_LINK_NAME
-
+        self.scene.max_episode_length_s = 10.0  # 限制长度，防止掉落，因为现在采用了generator的plane
         # Robot-specific semantic groups
         self.robot.feet_body_names = [FOOT_REGEX]
         # 若你不打算用“非法接触终止”，可不设置或改为更宽松的体：
-        self.robot.terminate_contacts_body_names = []  # 或 [r".*base.*", r".*_hip.*"]
+        self.robot.terminate_contacts_body_names = [r".*base.*","Head_upper", "Head_lower"]  # 或 [r".*base.*", r".*_hip.*"]
 
 
         # Domain randomization / events
         self.domain_rand.events.add_base_mass.params["asset_cfg"].body_names = [r".*base.*"]
         # 如需 base reset 扰动/外力脉冲/COM 偏置，可按你之前的范围逐步加到 events.* 中
-        # 例（若你的框架提供这些事件名）：
-        # self.domain_rand.events.reset_base.params = {
-        #     "pose_range": {"x": (-0.5,0.5),"y": (-0.5,0.5),"z": (0.0,0.2),
-        #                    "roll": (-3.14,3.14),"pitch": (-3.14,3.14),"yaw": (-3.14,3.14)},
-        #     "velocity_range": {"x": (-0.5,0.5),"y": (-0.5,0.5),"z": (-0.5,0.5),
-        #                        "roll": (-0.5,0.5),"pitch": (-0.5,0.5),"yaw": (-0.5,0.5)},
-        # }
+        # 摩擦力随机化（基类已预设 physics_material 事件，使用默认值 static(0.6,1.0) dynamic(0.4,0.8)）
+        # self.domain_rand.events.physics_material.params["static_friction_range"] = (0.4, 1.2)
+        # self.domain_rand.events.physics_material.params["dynamic_friction_range"] = (0.2, 0.9)
+        self.domain_rand.events.push_robot = EventTerm(
+            func=mdp.push_by_setting_velocity,
+            mode="interval",
+            interval_range_s=(5.0, 9.0),  # 每个episode约1次，与20s episode长度匹配
+            params={"velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0), "z": (0.0, 0.0)}},
+        )
+        self.domain_rand.events.reset_base.params = {
+            "pose_range": {
+                "x": (-1.0, 1.0), "y": (-1.0, 1.0), "z": (0.0, 0.05),
+                "roll": (0.0, 0.0), "pitch": (0.0, 0.0), "yaw": (-3.14, 3.14)
+            },
+            "velocity_range": {
+                "x": (-0.5, 0.5), "y": (-0.5, 0.5), "z": (0.0, 0.0),
+                "roll": (0.0, 0.0), "pitch": (0.0, 0.0), "yaw": (-0.2, 0.2)
+            }
+        }
         
         # 速度太小可能会影响gait
         self.commands.ranges.lin_vel_x = (-1.0, 2.5)  # 前后速度
+        self.commands.ranges.lin_vel_y = (-0.5, 0.5) 
+        self.commands.ranges.ang_vel_z = (-1.57, 1.57)
         # 全部收到行走指令，不存在静止站立指令
-        self.commands.rel_standing_envs = 0.0
+        self.commands.rel_standing_envs = 0.2
 @configclass
 class Go2FlatAgentCfg(BaseAgentCfg):
     experiment_name: str = "go2_flat"
@@ -515,17 +542,28 @@ class Go2DataCollectionEnvCfg(BaseEnvCfg):
         # 基础环境配置
         self.scene.robot = GO2_CFG
         self.scene.terrain_type = "generator"  
-        self.scene.terrain_generator = CLIFF_DETECTION_TERRAINS_CFG  
-        self.scene.max_episode_length_s = 10.0  # 数据收集时间
+        self.scene.terrain_generator = CLIFF_DETECTION_TERRAINS_CFG
+        # self.scene.terrain_generator = CLIFF_DETECTION_TERRAINS_LOW_SPEED_CFG
+        # self.scene.terrain_generator = FLAT_MESH_TERRAINS_CFG
+        
+        # self.scene.terrain_generator = RING_UNEVEN_TERRAINS_CFG  
+        self.scene.max_episode_length_s = 10.0  # 500 steps × 0.02s = 10.0s
+        
+        # === 启用随机地形 spawn（用于数据收集） ===
+        self.scene.enable_random_terrain_spawn = True
+        self.scene.terrain_generator.curriculum = False  # 关闭 curriculum
         
         # enable camera
         self.scene.camera.enable_camera = True
-        self.scene.camera.use_physical_asset = True  # 是否使用物理USD模型
-        self.scene.camera.prim_body_name = "base"  # 如果没有启用usd模型，则绑定到base，否则绑定到相机自身
+        # use_physical_asset=False: 相机 sensor 直接绑定到 base，不生成 D435 USD prim。
+        # 设为 True 会将 sensor 绑定到 base/d435/front_cam，Isaac Lab 在建立绑定时
+        # 会给 d435 prim 施加 RigidBodyAPI，导致相机变成有质量的刚体使机器人前倾。
+        self.scene.camera.use_physical_asset = True
+        self.scene.camera.prim_body_name = "base"
         self.scene.camera.height = 64  # 图像高度
         self.scene.camera.width = 64   # 图像宽度
         self.scene.camera.history_length = 2  # 历史长度
-        self.scene.camera.update_period = 0.025  # 40 FPS (0.005*5)
+        self.scene.camera.update_period = 0.02  # 50 FPS (0.005*4)
         self.scene.camera.debug_vis = True  # 可视化调试
         self.scene.camera.data_types = ["distance_to_image_plane"]  #深度
         
@@ -561,33 +599,190 @@ class Go2DataCollectionEnvCfg(BaseEnvCfg):
         
         # Robot配置
         self.robot.feet_body_names = [FOOT_REGEX]
-        self.robot.terminate_contacts_body_names = [BASE_LINK_NAME]  # 数据收集时不终止
+        # self.robot.terminate_contacts_body_names = [BASE_LINK_NAME, "Head_upper", "Head_lower"]  # 数据收集时不终止
+        self.robot.terminate_contacts_body_names = [r".*base.*","Head_upper", "Head_lower"]
         
-        # 简化奖励（数据收集不需要奖励）
-        # self.reward = Go2RewardCfg()
-        self.reward = None
+        # 启用奖励（用于world model学习reward预测）
+        self.reward = Go2RewardCfg()
+        # self.reward = None
         
         
         # 减少domain randomization（数据收集阶段保持稳定）
         # 注意：Head 质量很小，不要添加大范围质量随机化，否则会导致 PhysX 惯性张量错误
         self.domain_rand.events.add_base_mass.params["asset_cfg"].body_names = [r".*base.*"]
-        
-        # 多样化的初始状态（用于数据多样性）
+        # self.domain_rand.events.add_base_mass.params["mass_distribution_params"] = (0.0, 0.0)
+        # Body frame push: (-1,1) m/s 是 policy 可承受的满量程
+        # OOD 实验用质变 (friction/sustained force)，不用更大 impulse
+        # self.domain_rand.events.push_robot = EventTerm(
+        #     func=mdp.push_by_setting_velocity_body_frame,
+        #     mode="interval",
+        #     interval_range_s=(3.0, 7.0),  # 5s episode 内 ~50% 概率触发
+        #     params={"velocity_range": {"x": (1.0, 1.0), "y": (-1.0, 1.0), "z": (0.0, 0.0)}},
+        # )
+        # Spawn: ±0.5m (近边缘 1.5m, vx=0.3 在 5s 恰好到达)
+        self.domain_rand.events.push_robot = None
+        # self.domain_rand.events.reset_robot_joints.params = {
+        #     "position_range": (1.0, 1.0),
+        #     "velocity_range": (0.0, 0.0),
+        # }
         self.domain_rand.events.reset_base.params = {
+            # "pose_range": {
+            #     "x": (0.3, 1.2), "y": (0.3, 1.2), "z": (0.0, 0.0),
+            #     "roll": (0.0, 0.0), "pitch": (0.0, 0.0), "yaw": (0.0, 1.57)
+            # },
+            # "pose_range": {
+            #     "x": (0.0, 0.0), "y": (0.0, 0.0), "z": (0.0, 0.0),
+            #     "roll": (0.0, 0.0), "pitch": (0.0, 0.0), "yaw": (0.0, 0.0)
+            # },
             "pose_range": {
-                "x": (0.0, 0.0), "y": (0.0, 0.0), "z": (0.0, 0.0),
-                "roll": (0.0, 0.0), "pitch": (0.0, 0.0), "yaw": (0.0, 0.0)
+                "x": (0.5, 2.5), "y": (0.5, 2.5), "z": (0.0, 0.0),
+                "roll": (0.0, 0.0), "pitch": (0.0, 0.0), "yaw": (0.0, 1.57)
             },
             "velocity_range": {
-                "x": (0.0, 0.0), "y": (0.0, 0.0), "z": (0.0, 0.0),
-                "roll": (0.0, 0.0), "pitch": (0.0, 0.0), "yaw": (0.0, 0.0)
+                "x": (-0.0, 0.0), "y": (-0.0, 0.0), "z": (0.0, 0.0),
+                "roll": (0.0, 0.0), "pitch": (0.0, 0.0), "yaw": (-0.0, 0.0)
             }
         }
-        # commands variations
-        # 不考虑后退
-        self.commands.ranges.lin_vel_x = (0, 2.0)
-        self.commands.ranges.lin_vel_y = (0, 1.0) 
-        self.commands.ranges.ang_vel_z = (-2.0, 2.0)
+        
+        
+        # Commands: ω=±0.3 消除 4m platform 上的 trapping (P=0% at all speeds)
+        # cliff wall 参数
+        # self.commands.ranges.lin_vel_x = (0.3, 1.0)    # 低速样本+小平台 0.5→0.3 增加低速样本
+        # self.commands.ranges.lin_vel_y = (-0.3, 0.3) 
+        # self.commands.ranges.ang_vel_z = (-0.3, 0.3)   # ±1.57→±0.3 (关键: 消除 trapping)
+        
+        self.commands.ranges.lin_vel_x = (1.0, 2.8)    # 高速样本+大平台 1.0-2.8
+        self.commands.ranges.lin_vel_y = (-0.3, 0.3) 
+        self.commands.ranges.ang_vel_z = (-0.3, 0.3)   # ±1.57→±0.3 (关键: 消除 trapping)
+        
+        # self.commands.ranges.lin_vel_x = (1.2, 2.2)    # 高速样本+大平台 brake分组 2.2-2.5 1.2-2.2 0.5-1.2
+        # self.commands.ranges.lin_vel_y = (-0.0, 0.0) 
+        # self.commands.ranges.ang_vel_z = (-0.0, 0.0)  
+        # self.commands.ranges.lin_vel_y = (-0.3, 0.3) 
+        # self.commands.ranges.ang_vel_z = (-0.3, 0.3)   # ±1.57→±0.3 (关键: 消除 trapping)
+        self.commands.rel_standing_envs = 0.0  # %全部运动
+        
+        print(f"camera orientation (w,x,y,z): {self.scene.camera.offset.rot}")
+        
+
+@configclass
+class Go2DataEvaluationEnvCfg(BaseEnvCfg):
+    """Go2 environment configuration for data evaluation with camera"""
+    # __init__中只能完成简单赋值，如果有复杂的计算需要放在__post_init__中
+    def __post_init__(self):
+        super().__post_init__()
+        
+        # 基础环境配置
+        self.scene.robot = GO2_CFG
+        self.scene.terrain_type = "generator"  
+        self.scene.terrain_generator = CLIFF_EVALUATION_TERRAINS_CFG
+        # self.scene.terrain_generator = RING_UNEVEN_TERRAINS_CFG
+        # self.scene.terrain_generator = INCREASING_SLOPE_TERRAINS_CFG  
+        self.scene.max_episode_length_s = 20.0  # 250 steps × 0.02s = 5.0s
+        
+        # === 启用随机地形 spawn（用于数据收集） ===
+        self.scene.enable_random_terrain_spawn = True
+        self.scene.terrain_generator.curriculum = False  # 关闭 curriculum
+        
+        # enable camera
+        self.scene.camera.enable_camera = True
+        # use_physical_asset=False: 相机 sensor 直接绑定到 base，不生成 D435 USD prim。
+        # 设为 True 会将 sensor 绑定到 base/d435/front_cam，Isaac Lab 在建立绑定时
+        # 会给 d435 prim 施加 RigidBodyAPI，导致相机变成有质量的刚体使机器人前倾。
+        self.scene.camera.use_physical_asset = True
+        self.scene.camera.prim_body_name = "base"
+        self.scene.camera.height = 64  # 图像高度
+        self.scene.camera.width = 64   # 图像宽度
+        self.scene.camera.history_length = 2  # 历史长度
+        self.scene.camera.update_period = 0.02  # 50 FPS (0.005*4)
+        self.scene.camera.debug_vis = True  # 可视化调试
+        self.scene.camera.data_types = ["distance_to_image_plane"]  #深度
+        
+        # 相机硬件配置
+        self.scene.camera.spawn=sim_utils.PinholeCameraCfg(
+            focal_length=24.0, 
+            focus_distance=400.0, 
+            horizontal_aperture=20.955,
+            clipping_range=CLIP_RANGE
+        )
+        if self.scene.camera.use_physical_asset:
+            self.scene.camera.offset = CameraCfg.OffsetCfg(
+                pos=(0.0, 0.0, 0.0), 
+                rot=torch.as_tensor([1.0, 0.0, 0.0, 0.0]), # wxyz
+                convention="ros"
+            )
+        else:
+            euler_angles = torch.tensor([180.0, 70.0, -90.0])
+            euler_rad = torch.deg2rad(euler_angles)
+            base_quat = quat_from_euler_xyz(*tuple(euler_rad))
+            flip_vector = torch.tensor([1.0, 1.0, 1.0, -1.0])
+            final_quat = torch.tensor(base_quat) * flip_vector
+            
+            self.scene.camera.offset = CameraCfg.OffsetCfg(
+                pos=(0.33, 0.0, 0.08), 
+                rot=final_quat, 
+                convention="ros"
+            )
+            
+        # Height Scanner (可选，用于地形信息)
+        self.scene.height_scanner.enable_height_scan = False
+        self.scene.height_scanner.prim_body_name = BASE_LINK_NAME
+        
+        # Robot配置
+        self.robot.feet_body_names = [FOOT_REGEX]
+        # self.robot.terminate_contacts_body_names = [BASE_LINK_NAME, "Head_upper", "Head_lower"]  # 数据收集时不终止
+        self.robot.terminate_contacts_body_names = [r".*base.*","Head_upper", "Head_lower"]
+        
+        # 启用奖励（用于world model学习reward预测）
+        self.reward = Go2RewardCfg()
+        # self.reward = None
+        
+        
+        # 评估时固定物理参数：startup 随机化只运行一次，导致某些 env 固定得到
+        # 极端摩擦/质量组合，表现始终差于其他 env（"坏 env"问题）。
+        # - physics_material → reset 模式：每 episode 重新从训练同款范围采样
+        # - add_base_mass → 范围设为 (0, 0)：startup 模式下 mass 全程固定，
+        #   若某 env 分到 -5kg 则全程劣势；评估目的是测 filter 而非 DR 鲁棒性，
+        #   固定质量=0 使各 env 条件一致（不缩窄摩擦范围，保持训练分布）
+        # self.domain_rand.events.physics_material.mode = "reset"
+        self.domain_rand.events.add_base_mass.params["asset_cfg"].body_names = [r".*base.*"]
+        # self.domain_rand.events.add_base_mass.params["mass_distribution_params"] = (0.0, 0.0)
+        # Body frame push: (-1,1) m/s 是 policy 可承受的满量程
+        # OOD 实验用质变 (friction/sustained force)，不用更大 impulse
+        self.domain_rand.events.push_robot = EventTerm(
+            func=mdp.push_by_setting_velocity_body_frame,
+            mode="interval",
+            interval_range_s=(3.0, 7.0),  # 5s episode 内 ~50% 概率触发
+            params={"velocity_range": {"x": (1.0, 1.0), "y": (-0.0, 0.0), "z": (0.0, 0.0)}},
+        )
+        # Spawn: ±0.5m (近边缘 1.5m, vx=0.3 在 5s 恰好到达)
+        #测试时完全不随机化初始状态，来计算距离
+        self.domain_rand.events.reset_base.params = {
+            "pose_range": {
+                "x": (-0.0, 0.0), "y": (-0.0, 0.0), "z": (0.0, 0.0),
+                # "roll": (0.0, 0.0), "pitch": (0.0, 0.0), "yaw": (0.785, 0.785)
+                "roll": (0.0, 0.0), "pitch": (0.0, 0.0), "yaw": (0.0, 0.0)
+                
+            },
+            "velocity_range": {
+                "x": (-0.0, 0.0), "y": (-0.0, 0.0), "z": (0.0, 0.0),
+                "roll": (0.0, 0.0), "pitch": (0.0, 0.0), "yaw": (-0.0, 0.0)
+            }
+        }
+        # # 评估时关节固定为默认姿态（scale=1.0）。
+        # # 基类默认 position_range=(0.5, 1.5)，会使部分关节缩到 0.5× 默认角，
+        # # 导致机器人以半蹲/爬行姿态出生，对 ABS/WM 模型完全 OOD，立刻触发误报 alarm。
+        # self.domain_rand.events.reset_robot_joints.params = {
+        #     "position_range": (1.0, 1.0),
+        #     "velocity_range": (0.0, 0.0),
+        # }
+        
+        
+        # Commands: ω=±0.3 消除 4m platform 上的 trapping (P=0% at all speeds)
+        # self.commands.ranges.lin_vel_x = (0.3, 2.5)    # 0.5→0.3 增加低速样本
+        self.commands.ranges.lin_vel_x = (1.0, 1.0)    # 0.5→0.3 增加低速样本
+        self.commands.ranges.lin_vel_y = (0.0, 0.0) 
+        self.commands.ranges.ang_vel_z = (-0.1, 0.1)   # ±1.57→±0.3 (关键: 消除 trapping)
         self.commands.rel_standing_envs = 0.0  # %全部运动
         
         print(f"camera orientation (w,x,y,z): {self.scene.camera.offset.rot}")

@@ -280,7 +280,189 @@ class BaseEnv(VecEnv):
         # 在环境 reset 时，确保所有状态和目标都已同步到仿真引擎，仿真世界和 Python 侧的数据保持一致。
         self.scene.write_data_to_sim()
         self.sim.forward()
+        
+    # newly added    
+    def _pick_no_repeat(self, cells_tensor: torch.Tensor, n: int, count: int) -> torch.Tensor:
+        """从 cells_tensor[:n] 中无重复采样 count 个；count > n 时循环整轮再取余量。"""
+        if count <= n:
+            return cells_tensor[torch.randperm(n, device=self.device)[:count]]
+        parts = []
+        full_rounds, remainder = divmod(count, n)
+        for _ in range(full_rounds):
+            parts.append(cells_tensor[torch.randperm(n, device=self.device)])
+        if remainder:
+            parts.append(cells_tensor[torch.randperm(n, device=self.device)[:remainder]])
+        return torch.cat(parts, dim=0)
 
+    def _sample_terrain_cells_priority(self, free_cells: list, busy_cells: list, num_samples: int):
+        """优先从 free_cells（空闲格子）无重复采样，不足时再从 busy_cells 补充。
+
+        free_cells : 当前无机器人的有效地形格子
+        busy_cells : 已有机器人的有效地形格子（退而求其次）
+        """
+        n_free = len(free_cells)
+        n_busy = len(busy_cells)
+
+        if n_free == 0 and n_busy == 0:
+            raise ValueError("No valid terrain cells available.")
+
+        # 全在 free 内可以搞定
+        if n_free >= num_samples:
+            free_t = torch.tensor(free_cells, device=self.device)
+            chosen = self._pick_no_repeat(free_t, n_free, num_samples)
+            return chosen[:, 0], chosen[:, 1]
+
+        parts = []
+        # 先把所有 free 格子（打乱顺序）全放进去
+        if n_free > 0:
+            free_t = torch.tensor(free_cells, device=self.device)
+            parts.append(free_t[torch.randperm(n_free, device=self.device)])
+
+        remaining = num_samples - n_free
+        # 用 busy 补充；若 busy 也没有则循环 free
+        if n_busy > 0:
+            busy_t = torch.tensor(busy_cells, device=self.device)
+            parts.append(self._pick_no_repeat(busy_t, n_busy, remaining))
+        else:
+            free_t = torch.tensor(free_cells, device=self.device)
+            parts.append(self._pick_no_repeat(free_t, n_free, remaining))
+
+        chosen = torch.cat(parts, dim=0)
+        return chosen[:, 0], chosen[:, 1]
+
+    def randomize_terrain_spawn(self, env_ids):
+        """随机选择地形tile作为spawn点（优化版：利用查找表）
+        
+        核心优化：利用初始化时已计算好的env_origins，通过查找而非重新计算坐标
+        
+        地形网格布局说明：
+            - rows (levels): 难度等级维度，从0（最简单）到num_rows-1（最难）
+            - cols (types): 地形类型维度，从0到num_cols-1（不同形态的地形）
+            - terrain[row=i, col=j] 表示第i个难度等级的第j种地形类型
+        
+        实现思路：
+            1. 随机选择目标terrain[level, type]
+            2. 查找哪个env_id已经在该terrain上（而不是计算坐标！）
+            3. 直接复制该env_id的origin（保证与初始化100%一致）
+        
+        Args:
+            env_ids: 需要重置的环境索引列表
+        
+        Returns:
+            extras: 包含地形统计信息的字典，用于日志记录
+        """
+        num_resets = len(env_ids)
+        terrain_gen_cfg = self.scene.terrain.cfg.terrain_generator
+        num_rows = terrain_gen_cfg.num_rows
+        num_cols = terrain_gen_cfg.num_cols
+
+        # 如果 cfg 有 grid_layout + spawn_tile_keys，只从允许的格子里随机
+        grid_layout = getattr(terrain_gen_cfg, 'grid_layout', None)
+        spawn_tile_keys = getattr(terrain_gen_cfg, 'spawn_tile_keys', None)
+        if grid_layout is not None and spawn_tile_keys is not None:
+            valid_cells = [
+                (idx // num_cols, idx % num_cols)
+                for idx, key in enumerate(grid_layout)
+                if key in spawn_tile_keys
+            ]
+            if not valid_cells:
+                raise ValueError(f"spawn_tile_keys={spawn_tile_keys} 在 grid_layout 中没有匹配的格子。")
+        else:
+            valid_cells = [(r, c) for r in range(num_rows) for c in range(num_cols)]
+
+        # 计算当前仍占据 terrain 的 env（不在本次 reset 列表中）所占用的格子
+        staying_mask = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
+        staying_mask[env_ids] = False
+        staying_levels = self.scene.terrain.terrain_levels[staying_mask].cpu().tolist()
+        staying_types  = self.scene.terrain.terrain_types[staying_mask].cpu().tolist()
+        occupied_cells = set(zip(staying_levels, staying_types))
+
+        free_cells = [c for c in valid_cells if c not in occupied_cells]
+        busy_cells = [c for c in valid_cells if c in occupied_cells]
+        random_levels, random_types = self._sample_terrain_cells_priority(free_cells, busy_cells, num_resets)
+        
+        # === 直接使用 terrain_origins 原始坐标表 ===
+        # 
+        # TerrainImporter 在初始化时保存了所有地形块的原点坐标：
+        #   terrain_origins[level, type] = [x, y, z]  # shape: (num_rows, num_cols, 3)
+        # 
+        # 这是最准确的坐标来源，包含：
+        #   - 正确的 x, y 坐标（考虑了 size 和 spacing）
+        #   - 正确的 z 高度（如果地形有高度变化）
+        #
+        # 直接查表，不需要找其他 env 或手动计算！
+        
+        # 检查 terrain_origins 是否存在
+        if self.scene.terrain.terrain_origins is not None:
+            # 直接从原始地形坐标表查找
+            for i in range(num_resets):
+                # 需要从pytorch tensor转化成 Python int 才能索引
+                target_level = random_levels[i].item()
+                target_type = random_types[i].item()
+                
+                # 直接复制对应的origin坐标
+                self.scene.env_origins[env_ids[i]] = self.scene.terrain.terrain_origins[target_level, target_type].clone()
+                
+                # 更新地形索引
+                self.scene.terrain.terrain_levels[env_ids[i]] = target_level
+                self.scene.terrain.terrain_types[env_ids[i]] = target_type
+        else:
+            # terrain_origins 不存在（不应该发生，但保险起见）
+            print(f"[Warning] terrain_origins is None, using fallback calculation")
+            for i in range(num_resets):
+                target_level = random_levels[i]
+                target_type = random_types[i]
+                
+                self.scene.terrain.terrain_levels[env_ids[i]] = target_level
+                self.scene.terrain.terrain_types[env_ids[i]] = target_type
+                self._update_env_origins_from_terrain_indices(env_ids[i:i+1])
+        
+        # 调试输出：显示地形切换信息
+        if len(env_ids) > 0:
+            origins_info = [self.scene.env_origins[env_ids[i]].cpu().tolist() for i in range(min(3, num_resets))]
+            print(f"[Random Spawn] Reset {len(env_ids)} envs → terrains: {list(zip(random_levels.cpu().tolist()[:3], random_types.cpu().tolist()[:3]))}, origins: {origins_info}")
+        
+        extras = {
+            "Terrain/random_spawn_enabled": 1.0,
+            "Terrain/avg_level": torch.mean(random_levels.float()),
+            "Terrain/avg_type": torch.mean(random_types.float())
+        }
+        return extras
+    
+    def _update_env_origins_from_terrain_indices(self, env_ids):
+        """根据 terrain_levels 和 terrain_types 计算新的 env_origins
+        
+        坐标系统说明：
+            地形网格在世界坐标系中的布局：
+            - x轴方向：对应 cols (地形类型)
+            - y轴方向：对应 rows (难度等级)
+            - z轴方向：地形高度
+            
+            terrain[row=i, col=j] 的世界坐标原点：
+                x = j * (tile_width + spacing)
+                y = i * (tile_height + spacing)
+                z = 地形起始高度（从高度图采样或默认为0）
+        
+        Args:
+            env_ids: 需要更新origin的环境索引列表
+        """
+        terrain_cfg = self.scene.terrain.cfg.terrain_generator
+        size = terrain_cfg.size  # 单个terrain tile的尺寸，例如 (8.0, 8.0)
+        spacing = self.cfg.scene.env_spacing  # env之间的间距，例如 2.5
+        
+        # 获取对应env的terrain索引
+        levels = self.scene.terrain.terrain_levels[env_ids]  # 行索引（难度）
+        types = self.scene.terrain.terrain_types[env_ids]    # 列索引（类型）
+        
+        # 计算新的origin坐标（世界坐标系）
+        new_origins = torch.zeros(len(env_ids), 3, device=self.device)
+        new_origins[:,0] = types * (size[0] + spacing)
+        new_origins[:,1] = levels * (size[1] + spacing)
+        new_origins[:,2] = 0.0
+        
+        self.scene.env_origins[env_ids] = new_origins
+    
+    
     # 环境步 对应 step_dt
     def step(self, actions: torch.Tensor):
 
@@ -292,24 +474,27 @@ class BaseEnv(VecEnv):
         cliped_actions = torch.clip(delayed_actions, -self.clip_actions, self.clip_actions).to(self.device)
         processed_actions = cliped_actions * self.action_scale + self.robot.data.default_joint_pos
         # print("body_names:", self.robot.data.body_names)
-        print(f"current base height: {self.robot.data.root_pos_w[0,2].item():.4f}", end='\r')
+        #print(f"current base height: {self.robot.data.root_pos_w[0,2].item():.4f}", end='\r')
 
         # 每个环境步执行 decimation 次物理仿真步，每次用同一个动作。
         # step_dt = self.cfg.sim.dt * self.cfg.sim.decimation
         # where self.cfg.sim.dt 是物理仿真的时间步长(self.physics_dt)
-        # 检查是否启用了相机 - 如果启用，需要渲染才能更新相机数据
         has_camera = hasattr(self.cfg.scene, 'camera') and getattr(self.cfg.scene.camera, 'enable_camera', False)
-        
+
         for i in range(self.cfg.sim.decimation):
             self.sim_step_counter += 1
             self.robot.set_joint_position_target(processed_actions)
             self.scene.write_data_to_sim()
-            # 最后一个 decimation 步需要渲染以更新相机数据
-            need_render = has_camera and (i == self.cfg.sim.decimation - 1)
-            self.sim.step(render=need_render)
+            # 物理步始终用 render=False，避免 sim.step(render=True) 在 decimation 中间
+            # 触发 app.update()，后者可能通过 omni.physx 回调额外推进一次物理步，
+            # 导致有效物理步数为 decimation+1，破坏控制频率（训练 50Hz → 实际 ~40Hz）。
+            self.sim.step(render=False)
             self.scene.update(dt=self.physics_dt)
 
-        if not self.headless:
+        # 物理循环结束后统一渲染：
+        # - 有相机时必须渲染以更新 Replicator annotators（相机数据比物理晚一个控制步，但对 WM 训练可接受）
+        # - 非 headless 时渲染 GUI viewport
+        if has_camera or not self.headless:
             self.sim.render()
 
         # 一个episode一般包含多个环境步，每执行一次环境步，当前episode的步数+1
@@ -325,6 +510,10 @@ class BaseEnv(VecEnv):
 
         # reset_buf和time_out_buf都是bool类型的张量，表示哪些环境需要重置
         self.reset_buf, self.time_out_buf = self.check_reset()
+        # 必须在 reset() 之前更新 extras["time_outs"]，因为 reset() 在 env_ids 为空时
+        # 会 early-return（不执行 self.extras["time_outs"] = ...），导致 extras 里残留
+        # 上一步的 time_out_buf 引用（指向旧 tensor），使脚本误判已 reset 的 env 仍在超时。
+        self.extras["time_outs"] = self.time_out_buf
         # 计算奖励
         reward_buf = self.reward_manager.compute(self.step_dt)
         # [False, True, False, True]

@@ -45,7 +45,7 @@ class CameraCfg:
     height: int = 60
     width: int = 106
     history_length: int = 2
-    update_period: float = 0.025  # 0.005*5
+    update_period: float = 0.02  # 0.005*4
     debug_vis: bool = False
     data_types: list = None  # 在 scene.py 设置默认值 ["distance_to_image_plane"]
     spawn = None  # PinholeCameraCfg类型，在具体环境配置中设置
