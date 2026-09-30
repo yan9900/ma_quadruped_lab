@@ -45,10 +45,11 @@ class SceneCfg(InteractiveSceneCfg):
             max_init_terrain_level=config.max_init_terrain_level,
             collision_group=-1,
             physics_material=sim_utils.RigidBodyMaterialCfg(
-                friction_combine_mode="multiply",
-                restitution_combine_mode="multiply",
-                static_friction=1.0, #half ce-like surface
-                dynamic_friction=1.0, #half ce-like surface
+                friction_combine_mode=config.friction_combine_mode,
+                restitution_combine_mode=config.restitution_combine_mode,
+                static_friction=config.static_friction,
+                dynamic_friction=config.dynamic_friction,
+                restitution=config.restitution,
             ),
             visual_material=None,  # 不绑定 MDL 材质，使 color_scheme 的 vertex color 生效
             debug_vis=False,

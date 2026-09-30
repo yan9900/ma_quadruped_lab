@@ -41,3 +41,8 @@ legged_lab/CAMERA_VS_CAMERACFG_RELATIONSHIP.md
 legged_lab/CONFIGCLASS_DEEP_DIVE.md
 legged_lab/CONFIGCLASS_MAGIC_EXPLAINED.md
 legged_lab/INTERACTIVE_SCENE_MECHANISM.md
+
+# Root-level datasets and run logs (backed up offline, never committed)
+/data/
+*.log
+/legged_lab/scripts/archived/

@@ -44,6 +44,12 @@ from legged_lab.envs.go2.go2_config import (
     Go2DataCollectionEnvCfg,
     Go2DataEvaluationEnvCfg,
 )
+from legged_lab.envs.go2.go2_robotlab_parity_config import (
+    Go2RobotLabDataCollectionEnvCfg,
+    Go2RobotLabFlatAgentCfg,
+    Go2RobotLabFlatEnvCfg,
+    Go2RobotLabParityEnv,
+)
 from legged_lab.utils.task_registry import task_registry
 
 task_registry.register("h1_flat", BaseEnv, H1FlatEnvCfg(), H1FlatAgentCfg())
@@ -54,8 +60,19 @@ task_registry.register("gr2_flat", BaseEnv, GR2FlatEnvCfg(), GR2FlatAgentCfg())
 task_registry.register("gr2_rough", BaseEnv, GR2RoughEnvCfg(), GR2RoughAgentCfg())
 # Register GO2 environments
 task_registry.register("go2_flat", BaseEnv, Go2FlatEnvCfg(), Go2FlatAgentCfg())
+task_registry.register(
+    "go2_robotlab_parity_flat",
+    Go2RobotLabParityEnv,
+    Go2RobotLabFlatEnvCfg(),
+    Go2RobotLabFlatAgentCfg(),
+)
 task_registry.register("go2_rough", BaseEnv, Go2RoughEnvCfg(), Go2RoughAgentCfg())
 task_registry.register("go2_fall_recovery", Go2FallRecoveryEnv, Go2FallRecoveryFlatEnvCfg(), Go2FallRecoveryAgentCfg())
 # go2 data collection只是收集数据，没有对应的agent配置
 task_registry.register("go2_data_collection", BaseEnv, Go2DataCollectionEnvCfg(), Go2FlatAgentCfg())
+
+task_registry.register("go2_data_collection_robotlab", Go2RobotLabParityEnv,
+    Go2RobotLabDataCollectionEnvCfg(),
+    Go2RobotLabFlatAgentCfg(),
+)
 task_registry.register("go2_data_evaluation", BaseEnv, Go2DataEvaluationEnvCfg(), Go2FlatAgentCfg())

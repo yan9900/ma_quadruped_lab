@@ -44,16 +44,21 @@ class BaseEnv(VecEnv):
         self.num_envs = self.cfg.scene.num_envs
         self.seed(cfg.scene.seed)
 
+        physx_kwargs = {"gpu_max_rigid_patch_count": cfg.sim.physx.gpu_max_rigid_patch_count}
+        if cfg.sim.physx.gpu_collision_stack_size is not None:
+            physx_kwargs["gpu_collision_stack_size"] = cfg.sim.physx.gpu_collision_stack_size
+
         sim_cfg = sim_utils.SimulationCfg(
             device=cfg.device,
             dt=cfg.sim.dt,
             render_interval=cfg.sim.decimation,
-            physx=PhysxCfg(gpu_max_rigid_patch_count=cfg.sim.physx.gpu_max_rigid_patch_count),
+            physx=PhysxCfg(**physx_kwargs),
             physics_material=sim_utils.RigidBodyMaterialCfg(
-                friction_combine_mode="multiply",
-                restitution_combine_mode="multiply",
-                static_friction=1.0,
-                dynamic_friction=1.0,
+                friction_combine_mode=cfg.scene.friction_combine_mode,
+                restitution_combine_mode=cfg.scene.restitution_combine_mode,
+                static_friction=cfg.scene.static_friction,
+                dynamic_friction=cfg.scene.dynamic_friction,
+                restitution=cfg.scene.restitution,
             ),
         )
         self.sim = SimulationContext(sim_cfg)
@@ -106,6 +111,11 @@ class BaseEnv(VecEnv):
         # action buffer用来模仿控制延迟，这里只是初始化
         # action_buffer是一个delaybuffer实例
         self.action_scale = self.cfg.robot.action_scale
+        # Per-environment motor zero offset.  It is zero unless a reset event
+        # (for example RobotLab parity randomization) writes a sampled offset.
+        self.action_joint_pos_offset = torch.zeros(
+            self.num_envs, self.num_actions, dtype=torch.float, device=self.device
+        )
         self.action_buffer = DelayBuffer(
             self.cfg.domain_rand.action_delay.params["max_delay"], self.num_envs, device=self.device
         )
@@ -472,7 +482,11 @@ class BaseEnv(VecEnv):
 
         # actions完全作用于joints上
         cliped_actions = torch.clip(delayed_actions, -self.clip_actions, self.clip_actions).to(self.device)
-        processed_actions = cliped_actions * self.action_scale + self.robot.data.default_joint_pos
+        processed_actions = (
+            cliped_actions * self.action_scale
+            + self.robot.data.default_joint_pos
+            + self.action_joint_pos_offset
+        )
         # print("body_names:", self.robot.data.body_names)
         #print(f"current base height: {self.robot.data.root_pos_w[0,2].item():.4f}", end='\r')
 

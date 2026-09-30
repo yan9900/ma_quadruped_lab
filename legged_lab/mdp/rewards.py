@@ -91,6 +91,18 @@ def energy(env: BaseEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) ->
     reward = torch.norm(torch.abs(asset.data.applied_torque * asset.data.joint_vel), dim=-1)
     return reward
 
+
+def joint_power(env: BaseEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Sum absolute mechanical power over the selected joints, in watts.
+
+    This follows RobotLab's L1 aggregation exactly.  It intentionally differs
+    from :func:`energy`, which takes an L2 norm and therefore has a different
+    magnitude even though both use ``tau * qdot``.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    power = asset.data.applied_torque[:, asset_cfg.joint_ids] * asset.data.joint_vel[:, asset_cfg.joint_ids]
+    return torch.sum(torch.abs(power), dim=1)
+
 # 关节加速度 - penalty term
 def joint_acc_l2(env: BaseEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]
@@ -109,6 +121,39 @@ def action_rate_l2(env: BaseEnv) -> torch.Tensor:
         ),
         dim=1,
     )
+
+
+def action_rate_l2_robotlab(env: BaseEnv) -> torch.Tensor:
+    """RobotLab first-difference penalty, including the first post-reset action.
+
+    Isaac Lab's action manager compares the first action against a zero previous
+    action.  LeggedLab's ``DelayBuffer`` repeats its first pushed value across
+    the buffer, so the reset step is reconstructed explicitly here.
+    """
+    actions = env.action_buffer._circular_buffer.buffer
+    current = actions[:, -1, :]
+    previous = actions[:, -2, :]
+    difference = current - previous
+    first_step = env.episode_length_buf <= 1
+    difference = torch.where(first_step.unsqueeze(1), current, difference)
+    return torch.sum(torch.square(difference), dim=1)
+
+
+def action_smoothness_l2(env: BaseEnv) -> torch.Tensor:
+    """RobotLab second action difference with reset-boundary masking.
+
+    The output is one finite scalar per environment.  The first two policy
+    steps after reset are ignored because two real previous actions do not yet
+    exist.  Afterwards, RobotLab's per-joint zero-action masks are preserved.
+    """
+    actions = env.action_buffer._circular_buffer.buffer
+    current = actions[:, -1, :]
+    previous = actions[:, -2, :]
+    previous_previous = actions[:, -3, :]
+    difference = current - 2.0 * previous + previous_previous
+    valid = (env.episode_length_buf >= 3).unsqueeze(1)
+    valid = valid & (previous != 0.0) & (previous_previous != 0.0)
+    return torch.sum(torch.square(difference) * valid, dim=1)
 
 # contact/force functions
 # net_contact_forces [num_sensors, history_length, num_bodies, 3]
@@ -236,6 +281,80 @@ def joint_deviation_l1(env: BaseEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg(
     return torch.sum(torch.abs(angle), dim=1)
 
 
+def joint_pos_penalty_l1(
+    env: BaseEnv,
+    asset_cfg: SceneEntityCfg,
+    stand_still_scale: float,
+    velocity_threshold: float,
+    command_threshold: float,
+) -> torch.Tensor:
+    """RobotLab command-aware L1 offset for selected joints.
+
+    Joint angles are radians in the articulation's configured order.  The
+    running scale is used whenever either the command norm or planar body
+    velocity exceeds its threshold; otherwise ``stand_still_scale`` is used.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    command_norm = torch.linalg.norm(env.command_generator.command, dim=1)
+    planar_speed = torch.linalg.norm(asset.data.root_lin_vel_b[:, :2], dim=1)
+    offset = torch.linalg.norm(
+        asset.data.joint_pos[:, asset_cfg.joint_ids]
+        - asset.data.default_joint_pos[:, asset_cfg.joint_ids],
+        dim=1,
+        ord=1,
+    )
+    moving = (command_norm > command_threshold) | (planar_speed > velocity_threshold)
+    return torch.where(moving, offset, stand_still_scale * offset)
+
+
+def hip_pos_penalty_l1(
+    env: BaseEnv,
+    asset_cfg: SceneEntityCfg,
+    stand_still_scale: float,
+    command_threshold: float,
+) -> torch.Tensor:
+    """RobotLab L1 hip offset, conditioned on lateral/yaw commands."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    lateral_or_yaw_command = env.command_generator.command[:, [1, 2]]
+    command_is_large = torch.any(torch.abs(lateral_or_yaw_command) > command_threshold, dim=1)
+    offset = torch.linalg.norm(
+        asset.data.joint_pos[:, asset_cfg.joint_ids]
+        - asset.data.default_joint_pos[:, asset_cfg.joint_ids],
+        dim=1,
+        ord=1,
+    )
+    return torch.where(command_is_large, offset, stand_still_scale * offset)
+
+
+def feet_regulation(
+    env: BaseEnv,
+    base_height_target: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    sensor_cfg: SceneEntityCfg | None = None,
+) -> torch.Tensor:
+    """Penalize squared horizontal foot speed most strongly near terrain.
+
+    Positions and velocities are world-frame metres and metres/second.  The
+    exponential height gate reproduces RobotLab and returns ``[num_envs]``.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    feet_pos_w = asset.data.body_pos_w[:, asset_cfg.body_ids, :]
+    feet_xy_vel_w = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2]
+    base_pos_w = asset.data.root_pos_w.unsqueeze(1)
+    base_height = _get_base_height(env, base_height_target, asset_cfg, sensor_cfg)
+
+    gravity_w = torch.as_tensor(env.sim.cfg.gravity, device=env.device, dtype=feet_pos_w.dtype)
+    down_w = gravity_w / torch.linalg.norm(gravity_w)
+    feet_to_base_height = torch.sum(
+        (feet_pos_w - base_pos_w) * down_w.view(1, 1, 3), dim=-1
+    )
+    feet_height = torch.clamp(base_height.unsqueeze(1) - feet_to_base_height, min=0.0)
+    height_scale = 0.025 * base_height_target
+    return torch.sum(
+        feet_xy_vel_w.pow(2).sum(dim=-1) * torch.exp(-feet_height / height_scale), dim=1
+    )
+
+
 def body_orientation_l2(env: BaseEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]
     body_orientation = math_utils.quat_apply_inverse(
@@ -290,6 +409,16 @@ def joint_pos_limits(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -
     above = (q - hi).clamp(min=0.0)
     return torch.sum(below + above, dim=1)
 
+
+def joint_pos_limits_soft(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """RobotLab/Isaac Lab L1 violation of configured soft joint limits."""
+    asset: Articulation = env.scene[asset_cfg.name]
+    q = asset.data.joint_pos[:, asset_cfg.joint_ids]
+    limits = asset.data.soft_joint_pos_limits[:, asset_cfg.joint_ids]
+    below = (limits[..., 0] - q).clamp(min=0.0)
+    above = (q - limits[..., 1]).clamp(min=0.0)
+    return torch.sum(below + above, dim=1)
+
 # joint velocity limits
 # l1 norm, closer to limits, worse
 def joint_vel_limits(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
@@ -342,29 +471,45 @@ def joint_mirror(env, mirror_joints: List[Tuple[List[str], List[str]]]) -> torch
 # Root / Pose
 # -------------------------
 
-def base_height_l2(env: BaseEnv, target_height: float, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"), sensor_cfg: SceneEntityCfg = None) -> torch.Tensor:
-    # asset: Articulation = env.scene[asset_cfg.name]
-    # if len(asset_cfg.body_ids) > 0:
-    #     z = asset.data.body_pos_w[:, asset_cfg.body_ids[0], 2]
-    # else:
-    #     z = asset.data.root_pos_w[:, 2]
-    # return torch.square(z - target_height)
-    
+def _get_base_height(
+    env: BaseEnv,
+    base_height_target: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    sensor_cfg: SceneEntityCfg | None = None,
+) -> torch.Tensor:
+    """Return terrain-relative base height, with a per-environment ray fallback.
+
+    Ray hits have shape ``[num_envs, num_rays, 3]`` in world metres.  Invalid
+    rays in one environment never affect another environment.  An invalid scan
+    falls back to the target height, matching RobotLab's reset-safe behavior.
+    """
     asset: Articulation = env.scene[asset_cfg.name]
-    if sensor_cfg is not None:
-        ray_caster: RayCaster = env.scene[sensor_cfg.name]
-        # Adjust the target height using the sensor data
-        ray_hits = ray_caster.data.ray_hits_w[..., 2]
-        if torch.isnan(ray_hits).any() or torch.isinf(ray_hits).any() or torch.max(torch.abs(ray_hits)) > 1e6:
-            adjusted_target_height = asset.data.root_link_pos_w[:, 2]
-        else:
-            adjusted_target_height = target_height + torch.mean(ray_hits, dim=1)
-    else:
-        # Use the provided target height directly for flat terrain
-        adjusted_target_height = target_height
-    # Compute the L2 squared penalty
-    reward = torch.square(asset.data.root_pos_w[:, 2] - adjusted_target_height)
-    return reward
+    base_z = asset.data.root_pos_w[:, 2]
+    if sensor_cfg is None:
+        return base_z
+
+    ray_caster: RayCaster = env.scene[sensor_cfg.name]
+    ray_hits_z = ray_caster.data.ray_hits_w[..., 2]
+    invalid = (
+        torch.isnan(ray_hits_z).any(dim=1)
+        | torch.isinf(ray_hits_z).any(dim=1)
+        | (torch.max(torch.abs(ray_hits_z), dim=1).values > 1.0e6)
+    )
+    estimated_ground_z = torch.mean(ray_hits_z, dim=1)
+    fallback_ground_z = base_z - base_height_target
+    estimated_ground_z = torch.where(invalid, fallback_ground_z, estimated_ground_z)
+    return base_z - estimated_ground_z
+
+
+def base_height_l2(
+    env: BaseEnv,
+    target_height: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    sensor_cfg: SceneEntityCfg | None = None,
+) -> torch.Tensor:
+    """Squared error of terrain-relative base height in metres."""
+    base_height = _get_base_height(env, target_height, asset_cfg, sensor_cfg)
+    return torch.square(base_height - target_height)
 
 def root_lin_acc_z_l2(env, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]

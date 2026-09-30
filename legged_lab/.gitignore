@@ -74,3 +74,11 @@ nv_shadercache/
 *.pt
 
 docs/
+
+# Keep the RobotLab parity implementation plan under version control.
+!docs/
+docs/*
+!docs/GO2_ROBOTLAB_PARITY_PLAN.md
+!docs/ROBOTLAB_POLICY_COLLECTION.md
+!docs/FRICTION_DATASET_COMPOSITION.md
+!docs/GX_E4_README.md

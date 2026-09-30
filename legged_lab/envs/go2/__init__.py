@@ -3,6 +3,7 @@
 import gymnasium as gym
 
 from . import go2_config  # noqa: F401, F403
+from . import go2_robotlab_parity_config  # noqa: F401, F403
 
 ##
 # Register Gym environments.
@@ -27,6 +28,16 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": go2_config.Go2FlatEnvCfg,
         "rl_games_cfg_entry_point": go2_config.Go2FlatAgentCfg,
+    },
+)
+
+gym.register(
+    id="Go2-Flat-RobotLab-Parity-v0",
+    entry_point="legged_lab.envs.go2.go2_robotlab_parity_config:Go2RobotLabParityEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": go2_robotlab_parity_config.Go2RobotLabFlatEnvCfg,
+        "rl_games_cfg_entry_point": go2_robotlab_parity_config.Go2RobotLabFlatAgentCfg,
     },
 )
 

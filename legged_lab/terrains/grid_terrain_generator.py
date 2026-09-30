@@ -75,18 +75,40 @@ class GridTerrainGeneratorCfg(TerrainGeneratorCfg):
                     )
 
 
+# 最近一次生成的实际布局（行优先的 sub_terrain key 列表）。
+#
+# 为什么需要它：上游 TerrainGenerator 生成完只保留 terrain_mesh / terrain_origins /
+# flat_patches，"哪一格是哪种地形"这个信息被丢弃（见 _add_sub_terrain）；而
+# TerrainImporter 只把 generator 当局部变量用完即弃。下游要按地形分层分析就没法反查。
+# 生成时同时回写 cfg.grid_layout 和这个模块级变量，两条路取其一即可。
+LAST_REALIZED_LAYOUT: list[str] | None = None
+
+
 class GridTerrainGenerator(TerrainGenerator):
-    """支持 grid_layout 固定布局的 TerrainGenerator。"""
+    """TerrainGenerator + 布局记录。
+
+    - ``grid_layout`` 给定时按固定布局生成（每格类型确定，proportion 被忽略）。
+    - ``grid_layout=None`` 时按 proportion 逐格随机采样，行为与上游一致，
+      **但把实际采到的布局记录下来**，使 terrain_key 反查在随机模式下同样可用。
+    两种模式下 difficulty 都逐格随机。
+    """
 
     def _generate_random_terrains(self):
-        """如果 cfg 提供了 grid_layout 则按固定布局生成，否则走原始随机逻辑。"""
-        if not (hasattr(self.cfg, "grid_layout") and self.cfg.grid_layout is not None):
-            # 没有 grid_layout → 原始随机逻辑
-            super()._generate_random_terrains()
-            return
+        global LAST_REALIZED_LAYOUT
 
-        layout = self.cfg.grid_layout
         sub_terrains_cfgs = self.cfg.sub_terrains  # OrderedDict: name -> cfg
+        names = list(sub_terrains_cfgs.keys())
+        layout = getattr(self.cfg, "grid_layout", None)
+
+        if layout is None:
+            # 按 proportion 逐格随机采样（与上游 TerrainGenerator 同一套逻辑）
+            proportions = np.array([c.proportion for c in sub_terrains_cfgs.values()], dtype=float)
+            proportions /= proportions.sum()
+            n = self.cfg.num_rows * self.cfg.num_cols
+            layout = [names[self.np_rng.choice(len(proportions), p=proportions)] for _ in range(n)]
+            realized_is_sampled = True
+        else:
+            realized_is_sampled = False
 
         for index in range(self.cfg.num_rows * self.cfg.num_cols):
             (sub_row, sub_col) = np.unravel_index(index, (self.cfg.num_rows, self.cfg.num_cols))
@@ -99,3 +121,13 @@ class GridTerrainGenerator(TerrainGenerator):
 
             mesh, origin = self._get_terrain_mesh(difficulty, sub_cfg)
             self._add_sub_terrain(mesh, origin, sub_row, sub_col, sub_cfg)
+
+        # 回写，供下游反查 terrain_key
+        LAST_REALIZED_LAYOUT = list(layout)
+        self.cfg.grid_layout = list(layout)
+        if realized_is_sampled:
+            from collections import Counter
+            counts = Counter(layout)
+            print(f"[Terrain] grid_layout=None，按 proportion 采样得到 "
+                  f"{self.cfg.num_rows}x{self.cfg.num_cols} 实际配比: "
+                  + ", ".join(f"{k}={counts.get(k, 0)}" for k in names))

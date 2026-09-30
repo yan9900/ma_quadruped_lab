@@ -41,12 +41,29 @@ parser.add_argument("--seed", type=int, default=None)
 parser.add_argument("--max_steps", type=int, default=250,
                     help="Script-level per-episode step limit (default 250 = 5s @ 50Hz).")
 parser.add_argument("--max_episodes", type=int, default=500)
+parser.add_argument("--episodes_per_env", type=int, default=0,
+                    help="Require at least this many completed episodes in EVERY env; "
+                         "overrides the global --max_episodes stop condition. 0 disables.")
 parser.add_argument("--max_episode_length_s", type=float, default=10.0)
 
 # Critic Filter 参数
 parser.add_argument("--safety_threshold", type=float, default=0.0)
+parser.add_argument("--alarm_signal", type=str, default="critic",
+                    choices=["critic", "v_stop"],
+                    help="critic: alarm on Q(z, cmd) from --critic_path (default, unchanged). "
+                         "v_stop: alarm on V_stop(feat) from --v_stop_path, read on the real "
+                         "posterior. Use with a geometrically-labelled V_stop, whose value is "
+                         "the closest approach in metres.")
+parser.add_argument("--tau_v", type=str, default=None,
+                    help="Speed-scheduled alarm threshold, overriding --safety_threshold. "
+                         "Format 'v_hi:tau,v_hi:tau,...'; the last entry applies above its v_hi. "
+                         "Example '1.0:0.90,1.6:0.95,99:0.97'.")
 parser.add_argument("--monitor_only", action="store_true")
 parser.add_argument("--wm_path", type=str, default=None)
+parser.add_argument("--wm_config", type=str, default=None,
+                    help="Comma-separated WM recipe sections, merged after defaults,go2. "
+                         "Default: go2_ddpg_wm. For compmargin: "
+                         "go2_fricsweep,go2_fricsweep_privimag,go2_compmargin.")
 parser.add_argument("--critic_path", type=str, default=None)
 parser.add_argument("--gx_tau", type=float, default=None)
 parser.add_argument("--print_interval", type=int, default=50)
@@ -74,7 +91,16 @@ parser.add_argument("--diagnostic_repeat", type=int, default=1,
 parser.add_argument("--diagnostic_gamma", type=float, default=0.995)
 parser.add_argument("--adaptive_k", type=float, default=None)
 parser.add_argument("--adaptive_burnin", type=int, default=200)
-parser.add_argument("--eval_terrain", type=str, default=None, choices=["flat", "cliff"])
+parser.add_argument("--eval_terrain", type=str, default=None,
+                    choices=["flat", "cliff", "cliff_detection", "gx_main_big", "gx_e4"],
+                    help="cliff = CLIFF_EVALUATION_TERRAINS_CFG (20×20 tile, platform_width 10)；"
+                         "cliff_detection = CLIFF_DETECTION_TERRAINS_CFG (12×12 tile) —— "
+                         "★ 这个才是 WM/critic 训练数据用的地形（采集器 --terrain_profile cliff_brake）。"
+                         "用 cliff 会把 WM 放在分布外的深度图上。")
+parser.add_argument("--terrain_seed", type=int, default=None,
+                    help="固定地形 seed（考卷用 20260901）。给了就启用 mesh cache。")
+parser.add_argument("--exclude_slope", action="store_true",
+                    help="Remove slope terrain before generation; keep platform, pit and stairs.")
 parser.add_argument("--eval_h", type=int, default=30)
 parser.add_argument("--eval_safe_strict_f", type=int, default=None)
 
@@ -180,12 +206,43 @@ parser.add_argument("--ood_sustained_force", type=float, nargs=3,
                          "every step while in OOD zone. Depth unchanged; accumulating tilt "
                          "tests WM temporal integration. E.g.: --ood_sustained_force 0 10 0 "
                          "for 10N lateral. None = disabled (default).")
+# ── RobotLab policy / 停车静止性检查 ─────────────────────────────────────────
+parser.add_argument("--robotlab_policy", type=str, default=None,
+                    help="用 RobotLab MoE-CTS 导出的 student（exported/policy.pt）替换 LeggedLab PPO policy，"
+                         "经 utils/robotlab_policy.py 适配；需配合 --task go2_data_collection_robotlab。")
+parser.add_argument("--no_filter", action="store_true",
+                    help="不加载 WM/critic，用占位滤波器（从不报警、不接管）。只看 policy 本身的行为。")
+parser.add_argument("--stop_at_step", type=int, default=None,
+                    help="每个 episode 第 S 步起把速度指令置零（停车），并统计停车后的静止性："
+                         "机身速度、关节速度、足端落地次数、漂移。")
+parser.add_argument("--stop_settle_steps", type=int, default=50,
+                    help="停车后先等待多少步再开始统计静止性（默认 50 = 1 s）。")
+parser.add_argument("--camera_mount", choices=["task", "d435"], default="task",
+                    help="d435 = 实体 D435 挂载（gx_e4_v1 / E4 数据的相机）；task = 任务默认（非实体偏置）。评测必须与 WM 训练数据一致。")
+parser.add_argument("--actuator", choices=["dcmotor", "go2hv"], default="dcmotor",
+                    help="go2hv = RobotLab v1 训练用的 GO2HV 执行器（与 gx_main_v1 采集一致）。")
+parser.add_argument("--base_mass_range", type=float, nargs=2, default=None, metavar=("LOW", "HIGH"),
+                    help="覆盖 add_base_mass 的附加质量范围（kg）；RobotLab 训练为 ±1。")
 # ────────────────────────────────────────────────────────────────────────────
 
 import legged_lab.utils.cli_args as cli_args
 cli_args.add_rsl_rl_args(parser)
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
+if args_cli.episodes_per_env < 0:
+    parser.error('--episodes_per_env must be nonnegative')
+if args_cli.save_step_log or args_cli.episodes_per_env:
+    args_cli.log_step_data = True
+args_cli.tau_v_schedule = None
+if args_cli.tau_v:
+    try:
+        args_cli.tau_v_schedule = [(float(x.split(":")[0]), float(x.split(":")[1]))
+                                   for x in args_cli.tau_v.split(",") if x.strip()]
+    except (ValueError, IndexError):
+        parser.error(f"--tau_v must look like '1.0:0.90,1.6:0.95,99:0.97', got {args_cli.tau_v!r}")
+
+if args_cli.alarm_signal == "v_stop" and not args_cli.v_stop_path:
+    parser.error("--alarm_signal v_stop requires --v_stop_path")
 if args_cli.diagnose_q_target and not args_cli.v_stop_path:
     parser.error("--diagnose_q_target requires --v_stop_path PATH_TO_V_STOP_POST")
 if args_cli.diagnose_q_target and not Path(args_cli.v_stop_path).is_file():
@@ -250,8 +307,11 @@ def load_critic_filter(env, args):
     from critic_safety_filter import CriticSafetyFilter
     filt = CriticSafetyFilter(
         wm_path=args.wm_path,
+        wm_config=args.wm_config,
         critic_path=args.critic_path,
         threshold=args.safety_threshold,
+        tau_v_schedule=getattr(args, 'tau_v_schedule', None),
+        alarm_signal=args.alarm_signal,
         gx_tau=args.gx_tau,
         device="cuda:0",
         env=env,
@@ -635,8 +695,56 @@ class EpisodeMetrics:
 # =====================================================================
 #               Main
 # =====================================================================
+def configure_fixed_command(env_cfg, args):
+    """Lock all command-generator modes, including the standing override."""
+    if args.fixed_vx is None:
+        return
+    env_cfg.commands.ranges.lin_vel_x = (args.fixed_vx, args.fixed_vx)
+    env_cfg.commands.ranges.lin_vel_y = (args.fixed_vy, args.fixed_vy)
+    env_cfg.commands.ranges.ang_vel_z = (args.fixed_yaw, args.fixed_yaw)
+    env_cfg.commands.rel_standing_envs = 0.0
+    env_cfg.commands.heading_command = False
+    env_cfg.commands.rel_heading_envs = 0.0
+
+
+def sync_policy_command(env, obs_dict):
+    """Refresh only the newest command slots; do not append a history frame.
+
+    BaseEnv's 45D actor frame is [ang_vel, gravity, cmd, q, qdot, action].
+    Mutating the command generator alone leaves the already-built policy input stale.
+    """
+    frame_dim = 9 + 3 * env.num_actions
+    start = (env.cfg.robot.actor_obs_history_length - 1) * frame_dim + 6
+    obs = obs_dict['policy'].clone()
+    if obs.shape[-1] < start + 3:
+        raise ValueError('Policy observation does not match the configured actor history')
+    obs[:, start:start + 3] = torch.clamp(
+        env.command_generator.command[:, :3] * env.obs_scales.commands,
+        -env.clip_obs, env.clip_obs)
+    obs_dict['policy'] = obs
+
+
+def evaluation_complete(completed_per_env, total, global_limit, per_env_limit):
+    if per_env_limit:
+        return bool((completed_per_env >= per_env_limit).all().item())
+    return bool(global_limit and total >= global_limit)
+
+
+def _realized_grid_layout(env_cfg):
+    """实际生成的格子布局（key 列表，按 level*num_cols+type 索引）；cfg 被复制时回退到生成器的记录。"""
+    layout = getattr(env_cfg.scene.terrain_generator, "grid_layout", None)
+    if layout is None:
+        try:
+            from legged_lab.terrains import grid_terrain_generator as _gtg
+            layout = getattr(_gtg, "LAST_REALIZED_LAYOUT", None)
+        except ImportError:
+            layout = None
+    return [str(k) for k in layout] if layout is not None else None
+
+
 def main():
-    env_cfg, agent_cfg = task_registry.get_cfgs(args_cli.task)
+    import copy
+    env_cfg, agent_cfg = copy.deepcopy(task_registry.get_cfgs(args_cli.task))
 
     if args_cli.num_envs is not None:
         env_cfg.scene.num_envs = args_cli.num_envs
@@ -645,20 +753,94 @@ def main():
         from legged_lab.terrains.terrain_generator_cfg import FLAT_MESH_TERRAINS_CFG
         env_cfg.scene.terrain_generator = FLAT_MESH_TERRAINS_CFG
         env_cfg.scene.terrain_generator.curriculum = False
-    elif args_cli.eval_terrain == 'cliff':
-        from legged_lab.terrains.terrain_generator_cfg import CLIFF_EVALUATION_TERRAINS_CFG
-        env_cfg.scene.terrain_generator = CLIFF_EVALUATION_TERRAINS_CFG
+    elif args_cli.eval_terrain in ('cliff', 'cliff_detection'):
+        import copy as _copy
+        from legged_lab.terrains.terrain_generator_cfg import (
+            CLIFF_EVALUATION_TERRAINS_CFG, CLIFF_DETECTION_TERRAINS_CFG)
+        # cliff_detection 与采集器 --terrain_profile cliff_brake 走同一个 cfg
+        # (collect_go2_data_v3.py:730)，即 WM/critic 训练数据所在的地形分布。
+        _cfg = (CLIFF_DETECTION_TERRAINS_CFG if args_cli.eval_terrain == 'cliff_detection'
+                else CLIFF_EVALUATION_TERRAINS_CFG)
+        _name = ('CLIFF_DETECTION_TERRAINS_CFG' if args_cli.eval_terrain == 'cliff_detection'
+                 else 'CLIFF_EVALUATION_TERRAINS_CFG')
+        env_cfg.scene.terrain_generator = _copy.deepcopy(_cfg)
         env_cfg.scene.terrain_generator.curriculum = False
-        print(f"[INFO] Using CLIFF_EVALUATION_TERRAINS_CFG: "
-              f"{CLIFF_EVALUATION_TERRAINS_CFG.num_rows}×{CLIFF_EVALUATION_TERRAINS_CFG.num_cols} grid, "
-              f"tile size {CLIFF_EVALUATION_TERRAINS_CFG.size}")
+        if args_cli.terrain_seed is not None:
+            env_cfg.scene.terrain_generator.seed = int(args_cli.terrain_seed)
+            env_cfg.scene.terrain_generator.use_cache = True
+        print(f"[INFO] Using {_name}: "
+              f"{_cfg.num_rows}×{_cfg.num_cols} grid, tile size {_cfg.size}"
+              + (f", seed={args_cli.terrain_seed}" if args_cli.terrain_seed is not None else ""))
+        _half = float(_cfg.size[0]) / 2.0
+        if abs(args_cli.platform_half_width - _half) > 1e-6:
+            print(f"\033[93m[WARN] --platform_half_width={args_cli.platform_half_width} "
+                  f"与地形 tile 半宽 {_half} 不符 —— d_edge 会整体偏 "
+                  f"{args_cli.platform_half_width - _half:+.2f} m\033[0m")
+
+    elif args_cli.eval_terrain == 'gx_e4':
+        # gx_e4_v1 的地形（E4 的 CLIFF_DETECTION 去 stairs + box_low；12 m 格、平台边 ±4.0 m）
+        from legged_lab.terrains.terrain_generator_cfg import GX_E4_TERRAINS_CFG
+        env_cfg.scene.terrain_type = "generator"
+        env_cfg.scene.terrain_generator = copy.deepcopy(GX_E4_TERRAINS_CFG)
+        env_cfg.scene.terrain_generator.curriculum = False
+        env_cfg.scene.enable_random_terrain_spawn = True
+        if args_cli.terrain_seed is not None:
+            env_cfg.scene.terrain_generator.seed = int(args_cli.terrain_seed)
+            env_cfg.scene.terrain_generator.use_cache = True
+        if abs(args_cli.platform_half_width - 4.0) > 1e-6:
+            print(f"\033[93m[WARN] gx_e4 的平台边在 ±4.0 m，--platform_half_width={args_cli.platform_half_width}\033[0m")
+    elif args_cli.eval_terrain == 'gx_main_big':
+        # 静态高程图 g_x 主线的刹车地形（collect_go2_data_v3.py --terrain_profile gx_main_big，
+        # gx_main_v1 B/C）：14 m 格、平台 10 m（边在 ±5.0 m），box_low/box_high/step_pit。
+        from legged_lab.terrains.terrain_generator_cfg import GX_MAIN_BIG_TERRAINS_CFG
+        env_cfg.scene.terrain_type = "generator"
+        env_cfg.scene.terrain_generator = copy.deepcopy(GX_MAIN_BIG_TERRAINS_CFG)
+        env_cfg.scene.terrain_generator.curriculum = False
+        env_cfg.scene.enable_random_terrain_spawn = True
+        if args_cli.terrain_seed is not None:
+            env_cfg.scene.terrain_generator.seed = int(args_cli.terrain_seed)
+            env_cfg.scene.terrain_generator.use_cache = True
+        if abs(args_cli.platform_half_width - 5.0) > 1e-6:
+            print(f"\033[93m[WARN] gx_main_big 的平台边在 ±5.0 m，--platform_half_width={args_cli.platform_half_width}\033[0m")
+
+    if args_cli.exclude_slope:
+        terrain_cfg = copy.deepcopy(env_cfg.scene.terrain_generator)
+        if terrain_cfg is None or "slope" not in terrain_cfg.sub_terrains:
+            raise ValueError("--exclude_slope requires a terrain generator containing slope")
+        del terrain_cfg.sub_terrains["slope"]
+        if getattr(terrain_cfg, "grid_layout", None) is not None:
+            raise ValueError("--exclude_slope requires a sampled layout, not a fixed grid_layout")
+        env_cfg.scene.terrain_generator = terrain_cfg
+        print(f"[INFO] Excluded slope; terrain types: {list(terrain_cfg.sub_terrains)}")
+    if args_cli.terrain_seed is not None:
+        env_cfg.scene.terrain_generator = copy.deepcopy(env_cfg.scene.terrain_generator)
+        env_cfg.scene.terrain_generator.seed = int(args_cli.terrain_seed)
 
     agent_cfg = update_rsl_rl_cfg(agent_cfg, args_cli)
     env_cfg.scene.seed = agent_cfg.seed
     env_cfg.noise.add_noise = False
+    if args_cli.camera_mount == "d435":
+        from isaaclab.sensors import CameraCfg as _CameraCfg
+        env_cfg.scene.camera.use_physical_asset = True
+        env_cfg.scene.camera.offset = _CameraCfg.OffsetCfg(pos=(0.0, 0.0, 0.0), rot=(1.0, 0.0, 0.0, 0.0), convention="ros")
+        print("[INFO] 深度相机：实体 D435 挂载（base/d435/front_cam）")
+    if args_cli.actuator == "go2hv":
+        from legged_lab.assets.unitree.unitree_actuator import UnitreeActuatorCfg_Go2HV
+        env_cfg.scene.robot.actuators = {
+            "legs": UnitreeActuatorCfg_Go2HV(
+                joint_names_expr=[".*"], stiffness=25.0, damping=0.5, friction=0.01, min_delay=0, max_delay=4,
+            )
+        }
+        print("[INFO] 执行器：GO2HV（RobotLab v1 训练配置）")
+    if args_cli.base_mass_range is not None:
+        env_cfg.domain_rand.events.add_base_mass.params["mass_distribution_params"] = tuple(
+            sorted(float(x) for x in args_cli.base_mass_range))
+        print(f"[INFO] add_base_mass 覆盖为 {env_cfg.domain_rand.events.add_base_mass.params['mass_distribution_params']} kg")
 
-    _dc_cfg, _ = task_registry.get_cfgs("go2_data_collection")
-    env_cfg.scene.camera = _dc_cfg.scene.camera
+    # Camera-enabled collection tasks carry their own calibrated camera.
+    if not env_cfg.scene.camera.enable_camera:
+        _dc_cfg, _ = task_registry.get_cfgs("go2_data_collection")
+        env_cfg.scene.camera = copy.deepcopy(_dc_cfg.scene.camera)
 
     step_dt = env_cfg.sim.dt * env_cfg.sim.decimation
     env_cfg.scene.camera.update_period = step_dt
@@ -677,10 +859,7 @@ def main():
         print(f"[INFO] Fixed-step push: vx_impulse={_push_vx_val:.1f} m/s (body_frame)  "
               f"fires once per episode at step ∈ [{args_cli.push_frac_low:.2f}, {args_cli.push_frac_high:.2f}] * T_edge")
 
-    if args_cli.fixed_vx is not None:
-        env_cfg.commands.ranges.lin_vel_x = (args_cli.fixed_vx, args_cli.fixed_vx)
-        env_cfg.commands.ranges.lin_vel_y = (args_cli.fixed_vy, args_cli.fixed_vy)
-        env_cfg.commands.ranges.ang_vel_z = (args_cli.fixed_yaw, args_cli.fixed_yaw)
+    configure_fixed_command(env_cfg, args_cli)
 
     if args_cli.fixed_vx is not None and abs(args_cli.fixed_vx) > 1e-3:
         _step_dt_auto = env_cfg.sim.dt * env_cfg.sim.decimation
@@ -699,8 +878,12 @@ def main():
             env_cfg.scene.max_episode_length_s = _min_ep_s
             print(f"[INFO] Auto-adjusted max_episode_length_s: {_old_s:.1f}s → {_min_ep_s:.1f}s")
 
-    env_class = task_registry.get_task_class("go2_data_collection")
+    env_class = task_registry.get_task_class(args_cli.task)
     env = env_class(env_cfg, args_cli.headless)
+    if args_cli.episodes_per_env:
+        args_cli.max_episodes = env.num_envs * args_cli.episodes_per_env
+        print(f"[INFO] Episode quota: each of {env.num_envs} envs must complete "
+              f"{args_cli.episodes_per_env}; at least {args_cli.max_episodes} total.")
 
     print(f"[INFO] Env ready: {env.num_envs} envs, {env.num_actions}D actions, device={env.device}")
     if args_cli.fixed_vx is not None:
@@ -729,13 +912,26 @@ def main():
         print(f"[INFO] Video: {vid_path}  {W}x{H_vid} @ {video_fps:.1f}fps")
 
     # ==================== PPO policy ====================
-    log_root = os.path.abspath(os.path.join("logs", agent_cfg.experiment_name))
-    resume = get_checkpoint_path(log_root, agent_cfg.load_run, agent_cfg.load_checkpoint)
-    runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=os.path.dirname(resume),
-                            device=agent_cfg.device)
-    runner.load(resume, load_optimizer=False)
-    policy = runner.get_inference_policy(device=env.device)
-    print(f"[INFO] PPO policy loaded: {resume}")
+    if args_cli.robotlab_policy is not None:
+        from legged_lab.utils.robotlab_policy import RobotLabStudentPolicy, check_env_compat
+        _compat = check_env_compat(env)
+        if _compat:
+            raise ValueError("env 与 RobotLab student 的输入/动作约定不一致（应使用 "
+                             "--task go2_data_collection_robotlab）:\n  " + "\n  ".join(_compat))
+        policy = RobotLabStudentPolicy(os.path.abspath(args_cli.robotlab_policy),
+                                       env_joint_names=env.robot.data.joint_names,
+                                       history_len=env.cfg.robot.actor_obs_history_length,
+                                       device=env.device)
+        resume = os.path.abspath(args_cli.robotlab_policy)
+        print(f"[INFO] RobotLab student loaded: {resume}")
+    else:
+        log_root = os.path.abspath(os.path.join("logs", agent_cfg.experiment_name))
+        resume = get_checkpoint_path(log_root, agent_cfg.load_run, agent_cfg.load_checkpoint)
+        runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=os.path.dirname(resume),
+                                device=agent_cfg.device)
+        runner.load(resume, load_optimizer=False)
+        policy = runner.get_inference_policy(device=env.device)
+        print(f"[INFO] PPO policy loaded: {resume}")
 
     # ==================== 初始化 ====================
     robot: Articulation = env.scene["robot"]
@@ -749,7 +945,60 @@ def main():
     print("[INFO] Sensors warmed up")
 
     # ==================== Critic Filter ====================
-    critic_filter = load_critic_filter(env, args_cli)
+    if args_cli.no_filter:
+        class _NullFilter:
+            """占位滤波器：从不报警、不改指令，只为让评测循环在没有 WM 时照常运行。"""
+            gx_tau = None
+            wm_load_report = None
+
+            class stats:
+                @staticmethod
+                def summary():
+                    return {}
+
+            def filter_cmd(self, obs_dict, cmd, **kw):
+                n = cmd.shape[0]
+                z = torch.zeros(n, device=cmd.device)
+                return cmd, torch.ones(n, dtype=torch.bool, device=cmd.device), z, z, None
+
+            def finalize_episode(self, *a, **kw):
+                pass
+
+            def print_stats(self, *a, **kw):
+                print("  (no_filter：未加载 WM/critic)")
+        critic_filter = _NullFilter()
+        print("[INFO] --no_filter：未加载 WM/critic")
+    else:
+        critic_filter = load_critic_filter(env, args_cli)
+
+    # 停车静止性统计（--stop_at_step）
+    _stop_stats = []   # 每个 episode 一条
+    if args_cli.stop_at_step is not None:
+        _feet_ids = list(env.feet_cfg.body_ids)
+        _stop_acc = {k: torch.zeros(env.num_envs, device=env.device)
+                     for k in ("n", "speed", "qd", "touchdowns")}
+        _stop_xy0 = torch.zeros(env.num_envs, 2, device=env.device)
+        _stop_drift = torch.zeros(env.num_envs, device=env.device)
+        _prev_contact = torch.zeros(env.num_envs, len(_feet_ids), dtype=torch.bool, device=env.device)
+        print(f"[INFO] 停车检查：第 {args_cli.stop_at_step} 步起指令置零，再等 {args_cli.stop_settle_steps} 步开始统计")
+
+    def _flush_stop_stats(env_ids):
+        """episode 结束（环境终止或脚本强制超时）时，收集并清空该 env 的停车统计。"""
+        if args_cli.stop_at_step is None:
+            return
+        for _e in env_ids:
+            _n = float(_stop_acc["n"][_e])
+            if _n > 0:
+                _stop_stats.append({
+                    "env": _e, "steps": int(_n),
+                    "speed": float(_stop_acc["speed"][_e]) / _n,
+                    "qd": float(_stop_acc["qd"][_e]) / _n,
+                    "touchdowns_per_s": float(_stop_acc["touchdowns"][_e]) / (_n * step_dt),
+                    "drift": float(_stop_drift[_e]),
+                })
+            for _k in _stop_acc:
+                _stop_acc[_k][_e] = 0.0
+            _stop_drift[_e] = 0.0
 
     # ==================== 评估状态 ====================
     step_count = 0
@@ -941,12 +1190,23 @@ def main():
         _step_log = {k: [] for k in [
             'global_step', 'env_id', 'ep_id', 'ep_step',
             'state', 'q_val', 'g_val',
+            'trigger_val', 'alarm_now', 'takeover_remaining',
+            'margin_q', 'margin_v', 'margin_mu',
+            'root_x', 'root_y', 'origin_x', 'origin_y', 'origin_z', 'terrain_level', 'terrain_type',
             'q_target', 'q_critic_minus_target',
             'target_g_min', 'target_g_argmin', 'target_v_stop_tail',
             'target_tail_is_bottleneck', 'target_g_seq',
             'cmd_vx', 'cmd_vy', 'cmd_yaw', 'spd',
+            'd_edge',                      # ← 离平台边缘的距离（脚本几何代理）
             'ood_in_zone', 'ood_current_low',
             'f1_alpha',
+            # Per-frame episode outcome. Without these the only proxies are
+            # d_edge<0 (misses non-edge contacts: 5 of 8 falls) and a speed
+            # rebound (threshold-sensitive); takeover_remaining is useless here
+            # because it is logged before the decrement, so it is >0 on every
+            # final frame. Plots colour traces by these instead of by length,
+            # which confounds a fall with an earlier-started takeover.
+            'terminated', 'is_fall',
         ]}
         _ep_id_per_env = torch.zeros(env.num_envs, dtype=torch.int32, device=env.device)
     else:
@@ -968,8 +1228,10 @@ def main():
 
     try:
         while simulation_app.is_running():
-            if args_cli.max_episodes and episode_count >= args_cli.max_episodes:
-                print(f"\n[INFO] Reached {args_cli.max_episodes} episodes, exiting.")
+            if evaluation_complete(_ep_id_per_env, episode_count,
+                                   args_cli.max_episodes, args_cli.episodes_per_env):
+                counts = _ep_id_per_env.tolist() if _ep_id_per_env is not None else None
+                print(f"\n[INFO] Episode quota reached: total={episode_count}, per_env={counts}; exiting.")
                 break
 
             with torch.inference_mode():
@@ -984,8 +1246,10 @@ def main():
                     env.command_generator.command[in_warmup, 1] = 0.0
                     env.command_generator.command[in_warmup, 2] = 0.0
 
-                # 1. PPO action
-                actions_raw = policy(obs_dict)
+                if args_cli.stop_at_step is not None:
+                    _stopped = episode_step_buf >= args_cli.stop_at_step
+                    if _stopped.any():
+                        env.command_generator.command[_stopped, :3] = 0.0
 
                 # 2. Current command
                 cmd_current = env.command_generator.command[:, :3].clone()
@@ -1020,11 +1284,16 @@ def main():
                             # Sync ramp state so it doesn't fight the override next iteration
                             cmd_ramp[_ood_cmd_mask] = abs(OOD_CMD_VX)
 
+                # Policy must consume the command after warmup/ramp/OOD overrides.
+                sync_policy_command(env, obs_dict)
+                actions_raw = policy(obs_dict)
+
                 # 3. Critic filter
                 cmd_out, is_safe, q_vals, g_vals, q_rand_vals = critic_filter.filter_cmd(
                     obs_dict, cmd_current,
                     apply_filter=not args_cli.monitor_only,
                     compute_q_rand=args_cli.show_q_rand,
+                    speed=torch.linalg.vector_norm(robot.data.root_lin_vel_b[:, :2], dim=-1),
                 )
                 if args_cli.diagnose_q_target:
                     _qdiag = critic_filter.evaluate_brake_target(cmd_current)
@@ -1150,6 +1419,7 @@ def main():
                             env.command_generator.command[is_takeover, 2] = 0.0
                         else:
                             env.command_generator.command[is_takeover] = 0.0
+                        sync_policy_command(env, obs_dict)
                         actions_safe = policy(obs_dict)
                         actions_raw[is_takeover] = actions_safe[is_takeover]
                         low_q_run[is_takeover] = 0
@@ -1204,6 +1474,7 @@ def main():
                                 _push_lo, _push_hi + 1, (int(tk_done.sum().item()),),
                                 dtype=torch.int32, device=env.device)
                         critic_filter.finalize_episode(done_envs, is_fall=False)
+                        _stamp_outcome(done_envs.cpu(), [False] * len(done_envs))
                         episode_count += tk_done.sum().item()
                         takeover_ok_count += tk_done.sum().item()
                         if _ep_id_per_env is not None:
@@ -1228,6 +1499,21 @@ def main():
                                             target=_robot_pos.tolist())
 
                 metrics.update_pre_step(robot, env)
+                # Snapshot at the same observation as V_stop, before env.step can
+                # resample commands or auto-reset into a different terrain tile.
+                if _step_log is not None:
+                    _logged_cmd = env.command_generator.command[:, :3].clone()
+                    _logged_pos = robot.data.root_pos_w[:, :2].clone()
+                    _logged_spd = torch.linalg.vector_norm(robot.data.root_lin_vel_b[:, :2], dim=-1)
+                    _terrain = getattr(env.scene, 'terrain', None)
+                    _logged_orig = (_terrain.env_origins[:, :3].clone() if _terrain is not None
+                                    else env.scene.env_origins[:, :3].clone())
+                    _logged_levels = (getattr(_terrain, 'terrain_levels', None))
+                    _logged_types = (getattr(_terrain, 'terrain_types', None))
+                    _logged_levels = (_logged_levels.clone() if _logged_levels is not None else
+                                      torch.full((env.num_envs,), -1, device=env.device))
+                    _logged_types = (_logged_types.clone() if _logged_types is not None else
+                                     torch.full((env.num_envs,), -1, device=env.device))
 
                 # ── [OOD] zone detection + random/fixed friction flip ────────────
                 if _ood_enabled:
@@ -1389,14 +1675,37 @@ def main():
                             (args_cli.video_height, args_cli.video_width, 3), dtype=np.uint8))
                 episode_step_buf += 1
                 grace_left = torch.clamp(grace_left - 1, min=0)
+                if args_cli.stop_at_step is not None:
+                    _t0 = args_cli.stop_at_step + args_cli.stop_settle_steps
+                    _xy = robot.data.root_pos_w[:, :2]
+                    _start = episode_step_buf == _t0
+                    _stop_xy0[_start] = _xy[_start]
+                    _contact = env.contact_sensor.data.net_forces_w[:, _feet_ids].norm(dim=-1) > 1.0
+                    _in = episode_step_buf > _t0
+                    if _in.any():
+                        _stop_acc["n"][_in] += 1
+                        _stop_acc["speed"][_in] += robot.data.root_lin_vel_b[_in, :2].norm(dim=-1)
+                        _stop_acc["qd"][_in] += robot.data.joint_vel[_in].abs().mean(dim=-1)
+                        _stop_acc["touchdowns"][_in] += (_contact[_in] & ~_prev_contact[_in]).sum(dim=-1).float()
+                        _stop_drift[_in] = (_xy[_in] - _stop_xy0[_in]).norm(dim=-1)
+                    _prev_contact = _contact
                 if WARMUP_STEPS > 0 and in_warmup.any():
                     warmup_buf = torch.clamp(warmup_buf - 1, min=0)
                     episode_step_buf[in_warmup] -= 1
 
                 # Per-step logging
                 if _step_log is not None:
-                    _spd_all = torch.linalg.vector_norm(robot.data.root_lin_vel_b[:, :2], dim=-1)
-                    _cmd_all = env.command_generator.command
+                    _spd_all = _logged_spd
+                    _cmd_all = _logged_cmd
+                    # d_edge：与 position-mode 入区判据同一个几何代理
+                    # (play_with_ood_friction_eval.py 的 OOD zone 用的就是这个式子)
+                    try:
+                        _o = _logged_orig
+                        _p = _logged_pos
+                        _dedge_all = args_cli.platform_half_width - torch.max(
+                            (_p[:, 0] - _o[:, 0]).abs(), (_p[:, 1] - _o[:, 1]).abs())
+                    except Exception:
+                        _dedge_all = torch.full_like(_spd_all, float('nan'))
                     for _si in range(env.num_envs):
                         if int(takeover_steps[_si]) > 0:
                             _st = 4
@@ -1413,8 +1722,33 @@ def main():
                         _step_log['ep_id'].append(int(_ep_id_per_env[_si].item()))
                         _step_log['ep_step'].append(int(episode_step_buf[_si].item()))
                         _step_log['state'].append(_st)
+                        _step_log['alarm_now'].append(bool(alarm_now[_si].item()))
+                        _step_log['takeover_remaining'].append(int(takeover_steps[_si].item()))
+                        _step_log['root_x'].append(float(_logged_pos[_si, 0]))
+                        _step_log['root_y'].append(float(_logged_pos[_si, 1]))
+                        _step_log['origin_x'].append(float(_logged_orig[_si, 0]))
+                        _step_log['origin_y'].append(float(_logged_orig[_si, 1]))
+                        _step_log['origin_z'].append(float(_logged_orig[_si, 2]))
+                        _step_log['terrain_level'].append(int(_logged_levels[_si]))
+                        _step_log['terrain_type'].append(int(_logged_types[_si]))
                         _step_log['q_val'].append(float(q_vals[_si].item()))
+                        _trig = getattr(critic_filter, 'last_trigger', None)
+                        _step_log['trigger_val'].append(
+                            float(_trig[_si].item()) if _trig is not None
+                            else float(q_vals[_si].item()))
                         _step_log['g_val'].append(float(g_vals[_si].item()))
+                        # Compositional margin components: g = q - v^2/(2*kappa*mu*g0)/d_sat.
+                        # Logged raw so mu_hat can be read directly instead of
+                        # back-solved from Delta g (which assumes q/v are unbiased).
+                        _mc = getattr(critic_filter, 'last_margin_components', None)
+                        if _mc is not None:
+                            _step_log['margin_q'].append(float(_mc[_si, 0].item()))
+                            _step_log['margin_v'].append(float(_mc[_si, 1].item()))
+                            _step_log['margin_mu'].append(float(_mc[_si, 2].item()))
+                        else:
+                            _step_log['margin_q'].append(float('nan'))
+                            _step_log['margin_v'].append(float('nan'))
+                            _step_log['margin_mu'].append(float('nan'))
                         _step_log['q_target'].append(float(q_target_vals[_si].item()))
                         _step_log['q_critic_minus_target'].append(
                             float((q_vals[_si] - q_target_vals[_si]).item()))
@@ -1430,9 +1764,12 @@ def main():
                         _step_log['cmd_vy'].append(float(_cmd_all[_si, 1].item()))
                         _step_log['cmd_yaw'].append(float(_cmd_all[_si, 2].item()))
                         _step_log['spd'].append(float(_spd_all[_si].item()))
+                        _step_log['d_edge'].append(float(_dedge_all[_si].item()))
                         _step_log['ood_in_zone'].append(bool(ood_in_zone[_si].item()))
                         _step_log['ood_current_low'].append(bool(ood_current_low[_si].item()))
                         _step_log['f1_alpha'].append(float(f1_alpha[_si].item()))
+                        _step_log['terminated'].append(False)
+                        _step_log['is_fall'].append(False)
 
                 # Fixed-step push
                 if _do_manual_push:
@@ -1449,6 +1786,22 @@ def main():
                         print(f"\033[96m[PUSH] Step {step_count}: envs {push_env_ids.tolist()}, "
                               f"vx={_push_vx_val:.1f} m/s\033[0m")
 
+                # --- [STEP-LOG OUTCOME] stamp the rows written earlier this
+                # iteration (the log is appended at step 1551, before this block,
+                # and every env gets exactly one row per frame, so env _i owns
+                # row len - num_envs + _i).
+                def _stamp_outcome(env_ids, fall_flags):
+                    if _step_log is None or not _step_log['global_step']:
+                        return
+                    base = len(_step_log['global_step']) - env.num_envs
+                    if base < 0:
+                        return
+                    for _k, _i in enumerate(env_ids.tolist()):
+                        _r = base + int(_i)
+                        if 0 <= _r < len(_step_log['terminated']):
+                            _step_log['terminated'][_r] = True
+                            _step_log['is_fall'][_r] = bool(fall_flags[_k])
+
                 # 7. Env dones
                 if dones.any():
                     done_env_ids = torch.where(dones)[0]
@@ -1464,6 +1817,7 @@ def main():
 
                     fall_count += is_fall_per_env.sum().item()
                     episode_count += done_env_ids.shape[0]
+                    _stamp_outcome(done_env_ids.cpu(), is_fall_per_env.cpu().tolist())
                     if _ep_id_per_env is not None:
                         _ep_id_per_env[done_env_ids] += 1
                     critic_filter.finalize_episode(done_env_ids, is_fall_per_env)
@@ -1501,6 +1855,7 @@ def main():
                     # ─────────────────────────────────────────────────────────────
 
                     low_q_run[dones] = 0
+                    _flush_stop_stats(torch.where(dones)[0].tolist())
                     episode_step_buf[dones] = 0
                     takeover_steps[dones] = 0
                     pending_reset[dones] = False
@@ -1532,6 +1887,7 @@ def main():
                         forced_timeout &= ~(takeover_steps > 0)
                     if forced_timeout.any():
                         ft_ids = torch.where(forced_timeout)[0]
+                        _flush_stop_stats(ft_ids.tolist())
                         episode_count += ft_ids.shape[0]
                         if _ep_id_per_env is not None:
                             _ep_id_per_env[ft_ids] += 1
@@ -1675,6 +2031,19 @@ def main():
     if episode_count > 0:
         print(f"  Fall rate:  {fall_count/episode_count*100:.1f}%")
     critic_filter.print_stats(monitor_only=args_cli.monitor_only)
+    if args_cli.stop_at_step is not None:
+        print("\n" + "=" * 60)
+        print(f"停车静止性（第 {args_cli.stop_at_step} 步停车，停车 {args_cli.stop_settle_steps} 步后开始统计）")
+        if _stop_stats:
+            for r in _stop_stats:
+                print(f"  env{r['env']:2d}  统计 {r['steps']:3d} 步  机身速度 {r['speed']:.3f} m/s  "
+                      f"关节速度 {r['qd']:.3f} rad/s  足端落地 {r['touchdowns_per_s']:.2f} 次/s  漂移 {r['drift']:.3f} m")
+            _a = lambda k: np.mean([r[k] for r in _stop_stats])
+            print(f"  平均（{len(_stop_stats)} 条）: 机身速度 {_a('speed'):.3f} m/s  关节速度 {_a('qd'):.3f} rad/s  "
+                  f"足端落地 {_a('touchdowns_per_s'):.2f} 次/s  漂移 {_a('drift'):.3f} m")
+        else:
+            print("  没有完成统计的 episode（episode 太短？）")
+        print("=" * 60)
 
     # Tier-2
     metrics.print_summary(fall_count, takeover_ok_count, push_count_total)
@@ -1804,6 +2173,27 @@ def main():
         stats_dict.update({
             'config': {
                 'task':                  args_cli.task,
+                'env_class':             type(env).__name__,
+                'seed':                  agent_cfg.seed,
+                'load_run':              agent_cfg.load_run,
+                'ppo_checkpoint':        str(resume),
+                'random_terrain_spawn':  getattr(env_cfg.scene, 'enable_random_terrain_spawn', False),
+                'exclude_slope':         args_cli.exclude_slope,
+                'terrain_seed':          args_cli.terrain_seed,
+                'terrain_subtypes':      list(env_cfg.scene.terrain_generator.sub_terrains),
+                'terrain_num_cols':      int(env_cfg.scene.terrain_generator.num_cols),
+                'terrain_grid_layout':   _realized_grid_layout(env_cfg),
+                'actuator':              args_cli.actuator,
+                'camera_mount':          args_cli.camera_mount,
+                'rel_standing_envs':     env_cfg.commands.rel_standing_envs,
+                'step_dt':               step_dt,
+                'reset_grace_k':         RESET_GRACE_K,
+                'warmup_steps':          WARMUP_STEPS,
+                'tau_v_schedule':        args_cli.tau_v_schedule,
+                'wm_load':               critic_filter.wm_load_report,
+                'v_stop_path':           args_cli.v_stop_path,
+                'alarm_signal':          args_cli.alarm_signal,
+                'gx_tau':                critic_filter.gx_tau,
                 'num_envs':              env.num_envs,
                 'threshold':             args_cli.safety_threshold,
                 'alarm_k':               ALARM_K,
@@ -1815,6 +2205,9 @@ def main():
                 'max_episode_length_s':  args_cli.max_episode_length_s,
                 'max_steps_per_ep':      args_cli.max_steps,
                 'max_episodes':          args_cli.max_episodes,
+                'episodes_per_env':      args_cli.episodes_per_env,
+                'completed_episodes_per_env': (_ep_id_per_env.cpu().tolist()
+                                              if _ep_id_per_env is not None else None),
                 'fixed_vx':              args_cli.fixed_vx,
                 'fixed_vy':              args_cli.fixed_vy,
                 'fixed_yaw':             args_cli.fixed_yaw,
@@ -1901,4 +2294,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-    simulation_app.close()
+    # Video writers and NPZ/JSON files are closed above. Sensor-only runs have
+    # no asynchronous Replicator writer to drain; waiting can stall between arms.
+    simulation_app.close(wait_for_replicator=False)

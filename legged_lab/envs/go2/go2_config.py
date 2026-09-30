@@ -414,9 +414,9 @@ class Go2FlatEnvCfg(BaseEnvCfg):
         super().__post_init__()
         self.reward = Go2RewardCfg()
         self.scene.robot = GO2_CFG
-        # self.scene.terrain_type = "generator"       # 使用 mesh 平地，与部署环境接触行为一致
-        # self.scene.terrain_generator = FLAT_MESH_TERRAINS_CFG
-        self.scene.terrain_type = "plane"       # 使用 mesh 平地，与部署环境接触行为一致
+        # self.scene.terrain_type = "plane"       # 使用 mesh 平地，与部署环境接触行为一致
+        self.scene.terrain_type = "generator"       # 使用 mesh 平地，与部署环境接触行为一致
+        self.scene.terrain_generator = CLIFF_DETECTION_TERRAINS_CFG
 
         # =====================================================================
         # FLAG: 加入 D435 USD 视觉模型（纯外观，无物理影响）
@@ -463,7 +463,8 @@ class Go2FlatEnvCfg(BaseEnvCfg):
         }
         
         # 速度太小可能会影响gait
-        self.commands.ranges.lin_vel_x = (-1.0, 2.5)  # 前后速度
+        # self.commands.ranges.lin_vel_x = (-1.0, 2.5)  # 前后速度
+        self.commands.ranges.lin_vel_x = (2.5, 2.5)  # 前后速度
         self.commands.ranges.lin_vel_y = (-0.5, 0.5) 
         self.commands.ranges.ang_vel_z = (-1.57, 1.57)
         # 全部收到行走指令，不存在静止站立指令

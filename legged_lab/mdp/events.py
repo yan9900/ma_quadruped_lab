@@ -11,6 +11,39 @@ from isaaclab.envs import ManagerBasedEnv
 _push_done_registry: dict[int, torch.Tensor] = {}
 
 
+def randomize_action_joint_pos_offset(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor | None,
+    offset_range: tuple[float, float],
+):
+    """Randomize the joint-position action offset independently per environment.
+
+    ``BaseEnv`` applies this offset after action scaling and before sending the
+    position target to the articulation.  This is the direct equivalent of
+    RobotLab randomizing the joint-position action term's ``_offset`` tensor.
+    """
+    if env_ids is None:
+        env_ids = torch.arange(env.num_envs, device=env.device, dtype=torch.long)
+    elif not isinstance(env_ids, torch.Tensor):
+        env_ids = torch.as_tensor(env_ids, device=env.device, dtype=torch.long)
+    else:
+        env_ids = env_ids.to(device=env.device, dtype=torch.long)
+
+    if len(env_ids) == 0:
+        return
+
+    if not hasattr(env, "action_joint_pos_offset"):
+        raise AttributeError(
+            "The environment does not expose 'action_joint_pos_offset'; "
+            "motor zero-offset randomization requires BaseEnv support."
+        )
+
+    sampled_offsets = torch.empty(
+        len(env_ids), env.num_actions, device=env.device, dtype=env.action_joint_pos_offset.dtype
+    ).uniform_(*offset_range)
+    env.action_joint_pos_offset[env_ids] = sampled_offsets
+
+
 def push_by_setting_velocity_body_frame(
     env: ManagerBasedEnv,
     env_ids: torch.Tensor,

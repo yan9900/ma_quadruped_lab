@@ -1,0 +1,166 @@
+{
+  "task": {
+    "gym_id": "Go2-Flat-RobotLab-Parity-v0",
+    "registry_name": "go2_robotlab_parity_flat",
+    "reference": "/home/lcy/go2_rl_robotlab/source/robot_lab/robot_lab/tasks/go2/env_cfg.py",
+    "stage": "robotlab_randomized_flat"
+  },
+  "dimensions": {
+    "action": 12,
+    "policy_single": 45,
+    "policy_history": 10,
+    "policy": 450,
+    "critic_single": 52,
+    "critic_history": 10,
+    "height_scan": 0,
+    "critic": 520
+  },
+  "parity": [
+    {
+      "item": "simulation_dt_and_decimation",
+      "status": "exact",
+      "robotlab": "0.005 s x 4",
+      "leggedlab": "0.005 s x 4"
+    },
+    {
+      "item": "policy_action",
+      "status": "exact",
+      "robotlab": "q_default + 0.25 * action at 50 Hz",
+      "leggedlab": "q_default + 0.25 * action at 50 Hz"
+    },
+    {
+      "item": "joint_order",
+      "status": "intentionally_different",
+      "robotlab": [
+        "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
+        "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
+        "RL_hip_joint", "RL_thigh_joint", "RL_calf_joint",
+        "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint"
+      ],
+      "leggedlab": [
+        "FL_hip_joint", "FR_hip_joint", "RL_hip_joint", "RR_hip_joint",
+        "FL_thigh_joint", "FR_thigh_joint", "RL_thigh_joint", "RR_thigh_joint",
+        "FL_calf_joint", "FR_calf_joint", "RL_calf_joint", "RR_calf_joint"
+      ],
+      "reason": "Preserve compatibility with existing LeggedLab policies, deployment preprocessing, and datasets. Reward joints are resolved by name and all joint-wise terms reduce by sum, so reward values do not depend on this permutation."
+    },
+    {
+      "item": "pd_gains",
+      "status": "exact",
+      "robotlab": {"stiffness": 25.0, "damping": 0.5},
+      "leggedlab": {"stiffness": 25.0, "damping": 0.5}
+    },
+    {
+      "item": "default_pose",
+      "status": "exact",
+      "leggedlab": {
+        "base_z": 0.4,
+        "left_hip": 0.1,
+        "right_hip": -0.1,
+        "front_thigh": 0.8,
+        "rear_thigh": 1.0,
+        "calf": -1.5
+      }
+    },
+    {
+      "item": "solver_and_self_collision",
+      "status": "exact",
+      "leggedlab": {
+        "self_collision": true,
+        "position_iterations": 8,
+        "velocity_iterations": 4
+      }
+    },
+    {
+      "item": "policy_observation_order_scale_noise_history",
+      "status": "intentionally_different",
+      "note": "Policy uses the same 45 components, scales, noise, and ten-frame history (450 dimensions), but joint position/velocity/action fields retain LeggedLab's native joint order."
+    },
+    {
+      "item": "critic_observation",
+      "status": "intentionally_different",
+      "robotlab": "Current privileged frame: 88 proprioceptive/dynamics/contact-force values + 187 height rays = 275 dimensions, history length 1.",
+      "leggedlab": "Existing flat critic frame: policy frame 45 + base linear velocity 3 + four boolean foot contacts = 52; history length 10 gives 520 dimensions.",
+      "reason": "The flat parity task deliberately preserves the established LeggedLab critic input and does not use height scan."
+    },
+    {
+      "item": "history_reset_initialization",
+      "status": "semantically_equivalent",
+      "note": "CircularBuffer repeats the first post-reset frame across all ten actor and critic frames."
+    },
+    {
+      "item": "reward_set_initial_weights",
+      "status": "semantically_equivalent",
+      "note": "All 15 terms use the reference initial weights. Base-height and feet-regulation use world z rather than a ray scanner, which is equivalent on the zero-height plane."
+    },
+    {
+      "item": "commands",
+      "status": "intentionally_different",
+      "robotlab": "Command curriculum grows to x [-2,2], y [-1,1], yaw [-2,2], with step resampling every 5 s.",
+      "leggedlab": "Static full range: x [-2,2], y [-1,1], yaw [-2,2], with step resampling every 5 s; no heading mode, ramp, or curriculum.",
+      "reason": "Use RobotLab's final command envelope immediately while deliberately omitting its command-range curriculum."
+    },
+    {
+      "item": "episode_length",
+      "status": "intentionally_different",
+      "robotlab": "25 s",
+      "leggedlab": "10 s",
+      "reason": "Shorter flat-policy rollouts were requested; timeout remains a truncation."
+    },
+    {
+      "item": "reset_and_domain_randomization",
+      "status": "semantically_equivalent",
+      "robotlab": "Base mass add [-1,1] kg; other-body mass scale [0.9,1.1]; base COM xyz +/-0.03 m; material friction [0,2], restitution [0,0.5]; joint reset scale [0.5,1.5]; PD gains scale [0.9,1.1]; motor zero offset +/-0.035 rad; root pose/velocity randomization; velocity push every 4 s.",
+      "leggedlab": "The same event modes, distributions, ranges, and intervals are configured. Random variables act on the repository-local USD, whose nominal inertials differ from RobotLab's URDF.",
+      "reason": "Parameter-level parity; absolute randomized inertials can still differ because the source assets differ."
+    },
+    {
+      "item": "terrain",
+      "status": "intentionally_different",
+      "robotlab": "rough terrain generator",
+      "leggedlab": "infinite plane; height scanner disabled",
+      "reason": "This task is the flat parity baseline requested by the plan."
+    },
+    {
+      "item": "asset_geometry_and_inertials",
+      "status": "intentionally_different",
+      "robotlab": "Unitree URDF converted at runtime",
+      "leggedlab": "repository-local Go2 USD",
+      "reason": "The RobotLab URDF/mesh package is not vendored into LeggedLab; pose and solver settings are aligned explicitly."
+    },
+    {
+      "item": "actuator_model",
+      "status": "intentionally_different",
+      "robotlab": "Go2HV torque-speed curve, friction, delayed PD actuator",
+      "leggedlab": "DCMotor effort saturation at 23.5 Nm and 30 rad/s; delay disabled",
+      "reason": "The first parity stage disables delay and retains the local actuator implementation."
+    },
+    {
+      "item": "reward_curriculum",
+      "status": "intentionally_different",
+      "robotlab": "lin_vel_z -2 to 0 and base_height -1 to -10",
+      "leggedlab": "initial weights remain fixed",
+      "reason": "BaseEnv has no curriculum manager; initial-weight parity is isolated first."
+    },
+    {
+      "item": "physx_external_force_iteration_flag",
+      "status": "unknown",
+      "reason": "The installed Isaac Lab PhysxCfg does not expose RobotLab's enable_external_forces_every_iteration field."
+    },
+    {
+      "item": "contact_and_rest_offsets",
+      "status": "unknown",
+      "reason": "These values are authored in different source assets and are not proven identical."
+    },
+    {
+      "item": "ppo",
+      "status": "exact",
+      "note": "24 steps, 300000 iterations, [512,256,128] ELU networks, entropy 0.01, and matching PPO optimizer/loss parameters."
+    },
+    {
+      "item": "termination",
+      "status": "exact",
+      "note": "Only base contact above 1 N is a failure; timeout remains separately reported as truncation."
+    }
+  ]
+}

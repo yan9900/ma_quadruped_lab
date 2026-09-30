@@ -41,7 +41,8 @@ import os
 _LATENT_SAFETY_ROOT = Path("/home/lcy/latent-safety")
 _DREAMER_DIR = _LATENT_SAFETY_ROOT / "dreamerv3-torch"
 
-for p in [str(_LATENT_SAFETY_ROOT), str(_DREAMER_DIR)]:
+_VSTOP_DIR = _LATENT_SAFETY_ROOT / "scripts" / "vstop_Qbrake"
+for p in [str(_LATENT_SAFETY_ROOT), str(_DREAMER_DIR), str(_VSTOP_DIR)]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
@@ -64,22 +65,64 @@ def normalized_to_cmd(act_norm: np.ndarray) -> np.ndarray:
     return CMD_LOW + (CMD_HIGH - CMD_LOW) * (act_clipped + 1.0) / 2.0
 
 
-def preprocess_depth_like_training(depth_hw: np.ndarray) -> np.ndarray:
-    """
-    与训练完全一致的深度预处理 (对齐 tools.py::fill_expert_dataset_go2)：
-      1) nan/neginf → 0.0，posinf → 3.0m
-      2) 线性映射到 [0,1]：clip(img / 3.0, 0, 1)
-      3) 映射到 [0,255]，输出 (H,W,1) float32
+# Depth storage constants -- must match collect_go2_data_v3.quantize_depth
+# (--depth_clip_min/max, no_return=255) and dreamerv3-torch/tools.py
+# DEPTH_CLIP_MIN/MAX/U8_MAX/NO_RETURN_U8.  Every episode in
+# go2_fricsweep_2700ep.pkl carries depth_encoding
+# {dtype: uint8, clip_min: 0.3, clip_max: 3.0, no_return: 255}.
+DEPTH_CLIP_MIN = 0.30
+DEPTH_CLIP_MAX = 3.00
+DEPTH_U8_MAX = 254        # 255 is reserved for no-return, so the ramp ends at 254
+DEPTH_NO_RETURN_U8 = 255
 
-    ⚠️ 不使用 p2-p98 分位拉伸！训练代码已切换为线性 [0, 3.0] 映射。
+
+def preprocess_depth_like_training(depth_hw: np.ndarray) -> np.ndarray:
+    """Sensor depth (metres) -> WM image input, bit-identical to the training path.
+
+    The training images went through the v3 collector's uint8 quantisation before
+    tools.py ever saw them, so reproducing only tools.py's normalisation is not
+    enough -- the quantisation is where non-finite pixels get their value.
+    quantize_depth sends EVERY non-finite pixel (NaN and inf alike, via
+    ``~np.isfinite``) to 255, which depth_to_metres decodes as DEPTH_CLIP_MAX.
+
+    The previous implementation used ``np.nan_to_num(nan=0.0)``, which sent NaN
+    to the NEAREST representable depth instead of the farthest -- the opposite
+    end of the range.  ~10% of every frame from this sensor is NaN, so a tenth of
+    each image was handed to the encoder as "obstacle at 0.3 m", a value the
+    training path can never produce (its floor is 0.3 m -> pixel 25).  Measured
+    effect of that corruption on recorded trajectories: margin-head mu_hat R^2
+    0.583 -> 0.112 and q_hat mean +0.512 -> -0.834.
+
+    Steps, mirroring collector -> tools.py exactly:
+      1) quantize_depth : non-finite -> 255; finite -> clip[0.3, 3.0] -> 0..254 ramp
+      2) depth_to_metres: 255 -> 3.0 m;      0..254  -> 0.3 + q * (2.7 / 254)
+      3) tools.py shared normalisation: clip(m / 3.0, 0, 1) -> *255 -> uint8
     """
-    img = np.array(depth_hw, dtype=np.float32)
+    img = np.asarray(depth_hw, dtype=np.float32)
     if img.ndim == 3 and img.shape[-1] == 1:
         img = img.squeeze(-1)
 
-    img = np.nan_to_num(img, nan=0.0, posinf=3.0, neginf=0.0)
+    # 1) collector-side quantisation
+    finite = np.isfinite(img)
+    q = np.empty(img.shape, dtype=np.uint8)
+    q[~finite] = DEPTH_NO_RETURN_U8
+    if finite.any():
+        v = np.clip(img[finite], DEPTH_CLIP_MIN, DEPTH_CLIP_MAX)
+        q[finite] = np.round(
+            (v - DEPTH_CLIP_MIN) / (DEPTH_CLIP_MAX - DEPTH_CLIP_MIN) * DEPTH_U8_MAX
+        ).astype(np.uint8)
+
+    # 2) tools.depth_to_metres
+    span = (DEPTH_CLIP_MAX - DEPTH_CLIP_MIN) / DEPTH_U8_MAX
+    img = np.where(
+        q == DEPTH_NO_RETURN_U8,
+        np.float32(DEPTH_CLIP_MAX),
+        DEPTH_CLIP_MIN + q.astype(np.float32) * span,
+    ).astype(np.float32)
+
+    # 3) tools.fill_expert_dataset_go2 normalisation (guard kept for parity)
     if img.max() > 1.0:
-        img = np.clip(img / 3.0, 0, 1)
+        img = np.clip(img / DEPTH_CLIP_MAX, 0, 1)
 
     img = (img * 255).astype(np.uint8).astype(np.float32)
     if img.ndim == 2:
@@ -594,6 +637,8 @@ class CriticSafetyFilter:
         wm_path: str = None,
         critic_path: str = None,
         threshold: float = 0.0,
+        tau_v_schedule=None,
+        alarm_signal: str = "critic",
         gx_tau: float = None,
         device: str = "cuda:0",
         env: Optional[object] = None,
@@ -603,9 +648,34 @@ class CriticSafetyFilter:
         v_stop_path: str = None,
         diagnostic_repeat: int = 1,
         diagnostic_gamma: float = 0.995,
+        wm_config: str = None,
     ):
         self.device = device
+        self.wm_config = wm_config
         self.threshold = threshold
+        # Speed-scheduled alarm threshold.  The critic value behaves like a crash
+        # probability rather than a distance, so a single tau parks the alarm
+        # surface at a roughly fixed d_edge while the braking distance it must
+        # cover grows ~quadratically with speed (measured: alarm distance slope
+        # 0.17 m per m/s vs a 1.19 requirement).  Raising tau with speed holds
+        # the physical margin at the alarm constant instead.  Breakpoints are
+        # (v_upper, tau); the last entry applies above its v_upper.
+        self.tau_v_schedule = (sorted((float(v), float(t)) for v, t in tau_v_schedule)
+                               if tau_v_schedule else None)
+        # Which value drives the alarm.  "critic" is Q(z, cmd) from the DDPG
+        # policy -- what shipped so far.  "v_stop" reads V_stop(feat) on the real
+        # posterior instead: with geometric labels that value is the braking
+        # manoeuvre's closest approach in metres, so its level sets track the
+        # physical margin rather than a crash probability, and the threshold stops
+        # having to sit on the edge of a +1 point mass.
+        self.alarm_signal = str(alarm_signal)
+        self.last_trigger = None
+        if self.alarm_signal not in ("critic", "v_stop"):
+            raise ValueError(f"alarm_signal must be critic|v_stop, got {alarm_signal!r}")
+        print(f"[CriticFilter] alarm signal: {self.alarm_signal}")
+        if self.tau_v_schedule:
+            print("[CriticFilter] tau(v) schedule: "
+                  + "  ".join(f"v<{v:g}->{t:+.2f}" for v, t in self.tau_v_schedule))
         self.gx_tau = gx_tau if gx_tau is not None else self.DEFAULT_GX_TAU
 
         # ── 自适应阈值 ───────────────────────────────────────────────
@@ -617,6 +687,10 @@ class CriticSafetyFilter:
         self._adaptive_ready = False
         self._adaptive_tau = threshold  # 在 burn-in 期间用固定 threshold
         self.env = env
+        self._unscale_vec = None
+        self._default_joint_vel = None
+        self._unscale_warned = False
+        self.last_margin_components = None
         self.obs_state_dim = obs_state_dim
         self.diagnostic_repeat = max(1, int(diagnostic_repeat))
         self.diagnostic_gamma = float(diagnostic_gamma)
@@ -663,6 +737,7 @@ class CriticSafetyFilter:
 
     # ─── WM 加载 ────────────────────────────────────────────────────────
     def _load_world_model(self, path: str):
+        os.environ["DREAMER_DEVICE"] = str(self.device)
         import models
         import gymnasium as gym
 
@@ -681,14 +756,61 @@ class CriticSafetyFilter:
         # num_actions is not in configs.yaml — set from act_space (same as dreamer.py:248)
         config.num_actions = act_space.n if hasattr(act_space, 'n') else act_space.shape[0]
         self.wm = models.WorldModel(obs_space, act_space, 0, config)
-        ckpt = torch.load(path, map_location=self.device)
-        sd = {k[14:]: v for k, v in ckpt['agent_state_dict'].items() if '_wm' in k}
-        self.wm.load_state_dict(sd, strict=False)
+        ckpt = torch.load(path, map_location=self.device, weights_only=False)
+        state = ckpt.get('agent_state_dict', ckpt)
+        sd = self._extract_wm_state(state)
+        if not sd:
+            raise RuntimeError(f"No WM weights found in {path}")
+        try:
+            # Deployment must never continue with missing or incompatible weights.
+            self.wm.load_state_dict(sd, strict=True)
+        except RuntimeError as exc:
+            raise RuntimeError(
+                f"WM checkpoint/config mismatch: {path}; "
+                f"sections={self.wm_config_sections}. Pass --wm_config with the "
+                f"checkpoint's training recipe.\n{exc}"
+            ) from exc
+        self.wm.requires_grad_(False)
         self.wm.eval().to(self.device)
-        print(f"[CriticFilter] WM loaded from {path}")
+        self.wm_load_report = {
+            'path': str(Path(path).resolve()),
+            'config_sections': self.wm_config_sections,
+            'margin_kind': getattr(config, 'margin_kind', 'scalar'),
+            'loaded_keys': len(sd),
+            'expected_keys': len(self.wm.state_dict()),
+            'missing_keys': 0,
+            'unexpected_keys': 0,
+        }
+        print(f"[CriticFilter] WM loaded from {path}; "
+              f"{len(sd)}/{len(self.wm.state_dict())} keys, missing=0 unexpected=0; "
+              f"margin_kind={self.wm_load_report['margin_kind']}")
+
+    @staticmethod
+    def _extract_wm_state(state):
+        """Accept compiled/uncompiled Dreamer checkpoints and standalone WM state."""
+        sd = {}
+        standalone_roots = ('encoder.', 'dynamics.', 'heads.', 'priv_recon_head.',
+                            'priv_post_head.')
+        for key, value in state.items():
+            if key.startswith('_wm.'):
+                name = key[len('_wm.'):]
+            elif '._wm.' in key:
+                name = key.split('._wm.', 1)[1]
+            elif key.startswith('wm.'):
+                name = key[len('wm.'):]
+            elif key.startswith(standalone_roots) or key.startswith('_orig_mod.'):
+                name = key
+            else:
+                continue
+            if name.startswith('_orig_mod.'):
+                name = name[len('_orig_mod.'):]
+            if name in sd:
+                raise RuntimeError(f"Duplicate WM weight after prefix normalization: {name}")
+            sd[name] = value
+        return sd
 
     def _make_wm_config(self):
-        """从 configs.yaml 加载 go2_ddpg_wm config"""
+        """Build the WM with its training recipe; retain the legacy default recipe."""
         import ruamel.yaml as yaml
         from argparse import Namespace
 
@@ -696,10 +818,17 @@ class CriticSafetyFilter:
         cfg_path = _LATENT_SAFETY_ROOT / "configs.yaml"
         all_cfgs = yml.load(cfg_path.read_text())
 
+        recipe = getattr(self, 'wm_config', None)
+        extras = ([part.strip() for part in recipe.split(',') if part.strip()]
+                  if recipe is not None else ['go2_ddpg_wm'])
+        if recipe is not None and not extras:
+            raise ValueError('--wm_config must contain at least one config section')
+        self.wm_config_sections = list(dict.fromkeys(['defaults', 'go2', *extras]))
         merged = {}
-        for section in ['defaults', 'go2', 'go2_ddpg_wm']:
-            if section in all_cfgs:
-                self._deep_update(merged, all_cfgs[section])
+        for section in self.wm_config_sections:
+            if section not in all_cfgs:
+                raise ValueError(f"Unknown WM config section: {section}")
+            self._deep_update(merged, all_cfgs[section])
 
         ns = Namespace(**merged)
         ns.device = self.device
@@ -741,7 +870,12 @@ class CriticSafetyFilter:
         print(f"[CriticFilter] Critic loaded from {path}")
 
     def _load_v_stop(self, path: str):
-        from scripts.v_stop_utils import load_v_stop_model
+        # v_stop_utils moved into scripts/vstop_Qbrake/; keep the flat name working
+        # in case an older checkout still has it at scripts/v_stop_utils.py.
+        try:
+            from scripts.vstop_Qbrake.v_stop_utils import load_v_stop_model
+        except ImportError:
+            from v_stop_utils import load_v_stop_model
 
         self.v_stop_model, ckpt = load_v_stop_model(path, self.device)
         self.v_stop_model.eval()
@@ -826,9 +960,22 @@ class CriticSafetyFilter:
 
     @torch.no_grad()
     def get_g(self) -> torch.Tensor:
-        """获取 g(x) 单帧安全值  (N,)  —  tanh(margin - gx_tau)"""
+        """获取 g(x) 单帧安全值  (N,)  —  tanh(margin - gx_tau)
+
+        Also caches the compositional head's three components so the step log can
+        record what the composed margin was actually built from.  Without them
+        mu_hat can only be back-solved from Delta g, which assumes the other two
+        components are unbiased -- exactly the assumption under test.
+        """
         assert self.feat is not None, "call update() first"
-        return torch.tanh(self.wm.heads['margin'](self.feat) - self.gx_tau).squeeze(-1).squeeze(-1)
+        head = self.wm.heads['margin']
+        if hasattr(head, "components"):
+            # (N,1,3) -> (N,3): q_hat (d_free/d_sat), v_hat (m/s), mu_hat (static)
+            self.last_margin_components = (
+                head.components(self.feat).reshape(self.feat.shape[0], -1)[:, :3].detach())
+        else:
+            self.last_margin_components = None
+        return torch.tanh(head(self.feat) - self.gx_tau).squeeze(-1).squeeze(-1)
 
     @torch.no_grad()
     def evaluate(self, cmd_physical: torch.Tensor) -> torch.Tensor:
@@ -1000,6 +1147,7 @@ class CriticSafetyFilter:
         cmd_for_history: Optional[torch.Tensor] = None,
         compute_q_rand: bool = False,
         use_lookahead: bool = False,  # [LOOK-AHEAD ADD] True → Q(ẑ_{t+1}, cmd)
+        speed: Optional[torch.Tensor] = None,  # (N,) planar base speed, drives tau(v)
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         核心方法: 安全过滤 cmd  (批量, 每个 env 独立)
@@ -1040,6 +1188,16 @@ class CriticSafetyFilter:
         # 注意：此处换用 q_values 后，台下离线 tau 需通过 --eval_terrain sim
         # 重标定（sim tau sweep 存的也是 q_vals，因此完全自洽）。
         trigger_q = q_values
+        if self.alarm_signal == "v_stop":
+            if self.v_stop_model is None:
+                raise RuntimeError("alarm_signal='v_stop' needs --v_stop_path")
+            with torch.no_grad():
+                trigger_q = self.v_stop_model(self.feat.reshape(self.feat.shape[0], -1)).reshape(-1)
+        # Expose whatever actually drove the alarm; q_values stays the critic's Q so
+        # the existing diagnostics keep their meaning.  Without this the step log
+        # records the critic even when v_stop is the trigger, and tau cannot be
+        # recalibrated from a closed-loop run.
+        self.last_trigger = trigger_q.detach()
 
         if self.adaptive_k is not None:
             # 收集 Q(z, cmd) 统计，用于自适应阈值
@@ -1057,6 +1215,14 @@ class CriticSafetyFilter:
             current_tau = self._adaptive_tau
         else:
             current_tau = self.threshold
+
+        if self.tau_v_schedule is not None and speed is not None:
+            spd = speed.reshape(-1).to(trigger_q.device, dtype=trigger_q.dtype)
+            current_tau = torch.full_like(trigger_q, self.tau_v_schedule[-1][1])
+            for v_hi, tau_b in reversed(self.tau_v_schedule):   # low bucket wins
+                current_tau = torch.where(spd < v_hi,
+                                          torch.full_like(current_tau, tau_b),
+                                          current_tau)
 
         is_safe = trigger_q >= current_tau  # (N,)
 
@@ -1082,6 +1248,50 @@ class CriticSafetyFilter:
         return cmd_out, is_safe, q_values, g_values, q_rand
 
     # ─── 预处理 ────────────────────────────────────────────────────────
+    def _unscale_policy_obs(self, obs_state: torch.Tensor) -> torch.Tensor:
+        """(N,42) policy-scaled obs -> the raw robot.data units the WM was trained on.
+
+        Layout after the command strip matches collect_go2_data_v3.extract_state_vector:
+            [0:3] ang_vel | [3:6] projected_gravity | [6:18] joint_pos
+            [18:30] joint_vel | [30:42] last_action
+        Scales come from the live env config, never hard-coded, so a config change
+        cannot silently reintroduce the mismatch.
+        """
+        env = self.env
+        scales = getattr(env, "obs_scales", None) if env is not None else None
+        if scales is None:
+            if not self._unscale_warned:
+                print("\033[91m[CriticFilter] env.obs_scales unavailable -- obs fed to the "
+                      "WM stay at POLICY scale and will not match training.\033[0m")
+                self._unscale_warned = True
+            return obs_state
+        if self._unscale_vec is None:
+            vec = torch.tensor(
+                [float(scales.ang_vel)] * 3
+                + [float(scales.projected_gravity)] * 3
+                + [float(scales.joint_pos)] * 12
+                + [float(scales.joint_vel)] * 12
+                + [float(scales.actions)] * 12,
+                dtype=torch.float32, device=obs_state.device)
+            if vec.numel() != self.obs_state_dim or not bool((vec != 0).all()):
+                raise ValueError(f"bad obs_scales vector: {vec.tolist()}")
+            self._unscale_vec = vec
+            # default_joint_vel is subtracted by compute_current_observations but
+            # not by the collector, so it has to come back.  Usually all-zero for
+            # the Go2; read it rather than assume.
+            djv = getattr(getattr(env, "robot", None), "data", None)
+            djv = getattr(djv, "default_joint_vel", None)
+            self._default_joint_vel = (djv.to(obs_state.device).float()
+                                       if djv is not None else None)
+            print(f"[CriticFilter] un-scaling policy obs for the WM: "
+                  f"ang_vel/{scales.ang_vel} joint_vel/{scales.joint_vel}; "
+                  f"default_joint_vel "
+                  f"{'restored, |max|=%.4f' % float(self._default_joint_vel.abs().max()) if self._default_joint_vel is not None else 'unavailable (assumed 0)'}")
+        out = obs_state / self._unscale_vec
+        if self._default_joint_vel is not None:
+            out[:, 18:30] = out[:, 18:30] + self._default_joint_vel[:out.shape[0]]
+        return out
+
     def _preprocess_obs(self, obs_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
         LeggedLab obs → WM 输入格式
@@ -1148,6 +1358,27 @@ class CriticSafetyFilter:
         # Final safety clip to obs_state_dim
         if obs_state.shape[-1] != self.obs_state_dim:
             obs_state = obs_state[:, :self.obs_state_dim]
+
+        # ── Undo the policy observation scaling ──────────────────────────────
+        # The WM was trained on collect_go2_data_v3.BatchedEnvData.fetch, which
+        # reads robot.data DIRECTLY and applies no scaling at all:
+        #     ang_vel   = root_ang_vel_b
+        #     joint_pos = joint_pos - default_joint_pos
+        #     joint_vel = joint_vel                      (no default subtracted)
+        # obs_dict['policy'] is built by base_env.compute_current_observations,
+        # which multiplies by obs_scales (ang_vel 0.25, joint_vel 0.05) and also
+        # subtracts default_joint_vel.  Feeding that straight to the WM shrank
+        # joint_vel 20x and ang_vel 4x: on recorded frames joint_vel carries
+        # 82.4% of Var(obs_state) at training scale but only 1.2% at policy
+        # scale, so the encoder's dominant channel -- and the only place foot
+        # slip is visible -- was effectively deleted.
+        #
+        # Undoing the scaling here rather than reading robot.data keeps the real
+        # sensor path: with noise.add_noise = False (what play_* sets) the two are
+        # numerically identical, and if noise is ever enabled this one propagates
+        # it in physical units instead of silently handing the WM a privileged
+        # noise-free signal.
+        obs_state = self._unscale_policy_obs(obs_state)
 
         # ── 首步诊断日志（第1步 + 每500步打印一次）─────────────
         self._diag_step += 1

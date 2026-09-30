@@ -74,6 +74,11 @@ class BaseSceneCfg:
     max_init_terrain_level: int = 5
     height_scanner: HeightScannerCfg = HeightScannerCfg()
     camera: CameraCfg = CameraCfg()
+    friction_combine_mode: str = "multiply"
+    restitution_combine_mode: str = "multiply"
+    static_friction: float = 1.0
+    dynamic_friction: float = 1.0
+    restitution: float = 0.0
 
 
 @configclass
@@ -209,6 +214,7 @@ class DomainRandCfg:
 @configclass
 class PhysxCfg:
     gpu_max_rigid_patch_count: int = 10 * 2**15
+    gpu_collision_stack_size: int | None = None
 
 
 @configclass
