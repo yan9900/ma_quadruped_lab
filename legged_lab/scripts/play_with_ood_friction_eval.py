@@ -92,7 +92,7 @@ parser.add_argument("--diagnostic_gamma", type=float, default=0.995)
 parser.add_argument("--adaptive_k", type=float, default=None)
 parser.add_argument("--adaptive_burnin", type=int, default=200)
 parser.add_argument("--eval_terrain", type=str, default=None,
-                    choices=["flat", "cliff", "cliff_detection", "gx_main_big", "gx_e4"],
+                    choices=["flat", "cliff", "cliff_detection", "gx_main_big", "gx_e4", "gx_e4_showcase", "gx_e4_passable"],
                     help="cliff = CLIFF_EVALUATION_TERRAINS_CFG (20×20 tile, platform_width 10)；"
                          "cliff_detection = CLIFF_DETECTION_TERRAINS_CFG (12×12 tile) —— "
                          "★ 这个才是 WM/critic 训练数据用的地形（采集器 --terrain_profile cliff_brake）。"
@@ -777,11 +777,15 @@ def main():
                   f"与地形 tile 半宽 {_half} 不符 —— d_edge 会整体偏 "
                   f"{args_cli.platform_half_width - _half:+.2f} m\033[0m")
 
-    elif args_cli.eval_terrain == 'gx_e4':
-        # gx_e4_v1 的地形（E4 的 CLIFF_DETECTION 去 stairs + box_low；12 m 格、平台边 ±4.0 m）
-        from legged_lab.terrains.terrain_generator_cfg import GX_E4_TERRAINS_CFG
+    elif args_cli.eval_terrain in ('gx_e4', 'gx_e4_showcase', 'gx_e4_passable'):
+        # gx_e4_v1 的地形（E4 的 CLIFF_DETECTION 去 stairs + box_low；12 m 格、平台边 ±4.0 m）；
+        # showcase = 同参数、只改布局（高平台 / 低平台 / 斜坡各 1/3），用于看地形间差别
+        from legged_lab.terrains.terrain_generator_cfg import (
+            GX_E4_TERRAINS_CFG, GX_E4_SHOWCASE_TERRAINS_CFG, GX_E4_PASSABLE_SHOWCASE_CFG)
         env_cfg.scene.terrain_type = "generator"
-        env_cfg.scene.terrain_generator = copy.deepcopy(GX_E4_TERRAINS_CFG)
+        env_cfg.scene.terrain_generator = copy.deepcopy({
+            'gx_e4': GX_E4_TERRAINS_CFG, 'gx_e4_showcase': GX_E4_SHOWCASE_TERRAINS_CFG,
+            'gx_e4_passable': GX_E4_PASSABLE_SHOWCASE_CFG}[args_cli.eval_terrain])
         env_cfg.scene.terrain_generator.curriculum = False
         env_cfg.scene.enable_random_terrain_spawn = True
         if args_cli.terrain_seed is not None:

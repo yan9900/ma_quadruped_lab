@@ -411,6 +411,34 @@ GX_E4_TERRAINS_CFG = GridTerrainGeneratorCfg(
     },
 )
 
+# 展示用：GX_E4 的子地形参数完全不变（WM 见过的分布），只改布局比例——高平台 / 低平台 / 斜坡各约 1/3，无坑。
+GX_E4_SHOWCASE_TERRAINS_CFG = GX_E4_TERRAINS_CFG.replace(
+    grid_layout=_exact_layout({"dangerous_platform": 34, "box_low": 33, "slope": 33}),
+)
+
+# 展示用：只有「可跨」低平台（0.15–0.22 m < h_down 0.236）和斜坡，4×4 = 16 格。子地形参数取自 GX_E4（box_low 取其高度区间的下段）。
+GX_E4_PASSABLE_SHOWCASE_CFG = GridTerrainGeneratorCfg(
+    curriculum=False,
+    size=(12.0, 12.0),
+    border_width=20.0,
+    num_rows=4,
+    num_cols=4,
+    horizontal_scale=0.1,
+    vertical_scale=0.005,
+    slope_threshold=0.75,
+    color_scheme="height",
+    use_cache=False,
+    grid_layout=_exact_layout({"box_low": 8, "slope": 8}),
+    sub_terrains={
+        "box_low": terrain_gen.MeshBoxTerrainCfg(
+            proportion=0.5, box_height_range=(0.15, 0.22), platform_width=8.0, double_box=False,
+        ),
+        "slope": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
+            proportion=0.5, slope_range=(0.15, 0.25), platform_width=8.0,
+        ),
+    },
+)
+
 CLIFF_DETECTION_TERRAINS_LOW_SPEED_CFG = TerrainGeneratorCfg(
     curriculum=False,
     size=(8.0, 8.0), #8 
